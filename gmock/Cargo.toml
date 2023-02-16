@@ -1,0 +1,11 @@
+[package]
+name = "gmock"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gmock-macros = "0.1"
+parking_lot = "0.12"
+
+[dev-dependencies]
+gmock-macros = { version = "*", features = [ ] }
