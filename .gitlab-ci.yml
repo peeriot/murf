@@ -1,0 +1,14 @@
+stages:
+  - check
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_OPEN_MERGE_REQUESTS'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "master"'
+      when: always
+    - if: '$CI_COMMIT_BRANCH'
+      when: never
+
+include:
+  - '.ci/check/.gitlab-ci.yml'

@@ -1,0 +1,8 @@
+[toolchain]
+components = [
+    "rls",
+    "rust-src",
+    "rustfmt",
+    "cargo",
+    "clippy",
+]

@@ -97,6 +97,6 @@ impl ToTokens for Call {
         });
 
         #[cfg(feature = "debug")]
-        println!("\nexpect_call!:\n{:#}\n", tokens);
+        println!("\nexpect_call!:\n{tokens:#}\n");
     }
 }

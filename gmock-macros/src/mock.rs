@@ -50,7 +50,7 @@ impl ToTokens for MockableObject {
         let (ga_mock_impl, ga_mock_types, ga_mock_where) = ga_mock.split_for_impl();
         let ga_mock_phantom = ga_mock.make_phantom_data();
 
-        let expectation_err = format!("Mocked object '{}' has unfulfilled expectations", ident);
+        let expectation_err = format!("Mocked object '{ident}' has unfulfilled expectations");
         let module = format_ident!("mock_impl_{}", ident.to_string());
 
         let method_mock = if self.parsed.derives("Default") {
@@ -193,7 +193,7 @@ impl ToTokens for MockableObject {
         });
 
         #[cfg(feature = "debug")]
-        println!("\nmock!:\n{:#}\n", tokens);
+        println!("\nmock!:\n{tokens:#}\n");
     }
 }
 
