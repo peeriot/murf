@@ -38,14 +38,14 @@ where
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self.range.start_bound() {
             Bound::Unbounded => write!(f, "[_, "),
-            Bound::Included(x) => write!(f, "[{}, ", x),
-            Bound::Excluded(x) => write!(f, "({}, ", x),
+            Bound::Included(x) => write!(f, "[{x}, "),
+            Bound::Excluded(x) => write!(f, "({x}, "),
         }?;
 
         match self.range.end_bound() {
             Bound::Unbounded => write!(f, "_]"),
-            Bound::Included(x) => write!(f, "{}]", x),
-            Bound::Excluded(x) => write!(f, "{})", x),
+            Bound::Included(x) => write!(f, "{x}]"),
+            Bound::Excluded(x) => write!(f, "{x})"),
         }?;
 
         Ok(())
