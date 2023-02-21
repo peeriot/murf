@@ -11,8 +11,7 @@ use syn::{
     punctuated::Punctuated,
     token::{Gt, Lt},
     Attribute, FnArg, GenericParam, Generics, ImplItem, ImplItemMethod, ImplItemType, Item,
-    ItemEnum, ItemImpl, ItemStruct, Lifetime, LifetimeDef, Meta, NestedMeta, PatType, ReturnType,
-    Stmt, Token, Type,
+    ItemEnum, ItemImpl, ItemStruct, Lifetime, LifetimeDef, PatType, ReturnType, Stmt, Token, Type,
 };
 
 use crate::misc::{format_expect_call, format_expect_module, format_expectations_field};
@@ -59,19 +58,6 @@ impl ToTokens for MockableObject {
         let expectation_err = format!("Mocked object '{ident}' has unfulfilled expectations");
         let module = format_ident!("mock_impl_{}", ident.to_string());
 
-        let method_mock = if self.parsed.derives("Default") {
-            Some(quote! {
-                pub fn mock<'mock>() -> (
-                    #module::Handle #ga_mock_types,
-                    #module::Mock #ga_mock_types
-                ) {
-                    Self::default().into_mock()
-                }
-            })
-        } else {
-            None
-        };
-
         let mock = &self.generated.mock;
         let handle = &self.generated.handle;
         let expectation_modules = &self.generated.expectation_modules;
@@ -104,7 +90,15 @@ impl ToTokens for MockableObject {
 
         tokens.extend(quote! {
             impl #ga_impl #ident #ga_types #ga_where {
-                #method_mock
+                pub fn mock<'mock>() -> (
+                    #module::Handle #ga_mock_types,
+                    #module::Mock #ga_mock_types
+                )
+                where
+                    Self: Default,
+                {
+                    Self::default().into_mock()
+                }
 
                 pub fn into_mock<'mock>(self) -> (
                     #module::Handle #ga_mock_types,
@@ -265,30 +259,6 @@ impl ToTokens for MockableObject {
 struct Parsed {
     object: ObjectToMock,
     impls: Vec<ItemImpl>,
-}
-
-impl Parsed {
-    fn derives(&self, name: &str) -> bool {
-        self.object.attrs().iter().any(|attr| {
-            if let Ok(Meta::List(ml)) = attr.parse_meta() {
-                let i = ml.path.get_ident();
-                if i.map_or(false, |i| *i == "derive") {
-                    ml.nested.iter().any(|nm| {
-                        if let NestedMeta::Meta(m) = nm {
-                            let i = m.path().get_ident();
-                            i.map_or(false, |i| *i == name)
-                        } else {
-                            false
-                        }
-                    })
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        })
-    }
 }
 
 /* Generator */
@@ -788,13 +758,6 @@ impl ObjectToMock {
         match self {
             Self::Enum(o) => o.ident.to_token_stream(),
             Self::Struct(o) => o.ident.to_token_stream(),
-        }
-    }
-
-    fn attrs(&self) -> &[Attribute] {
-        match self {
-            Self::Enum(o) => &o.attrs,
-            Self::Struct(o) => &o.attrs,
         }
     }
 
