@@ -94,6 +94,13 @@ impl ToTokens for MockableObject {
                 #field: Vec<#ident::Expectation #ga_mock_types>
             }
         });
+        let expectation_field_ctor = self.generated.expectations.iter().map(|ident| {
+            let field = format_expectations_field(ident);
+
+            quote! {
+                #field: Vec::new()
+            }
+        });
 
         tokens.extend(quote! {
             impl #ga_impl #ident #ga_types #ga_where {
@@ -200,11 +207,19 @@ impl ToTokens for MockableObject {
 
                 /* Shared */
 
-                #[derive(Default)]
                 #[allow(non_snake_case)]
                 pub struct Shared #ga_mock_types #ga_mock_where {
                     #( #expectation_field_defs, )*
                     _marker: #ga_mock_phantom,
+                }
+
+                impl #ga_mock_impl Default for Shared #ga_mock_types #ga_mock_where {
+                    fn default() -> Self {
+                        Self {
+                            #( #expectation_field_ctor, )*
+                            _marker: PhantomData,
+                        }
+                    }
                 }
 
                 impl #ga_mock_impl Shared #ga_mock_types #ga_mock_where {
@@ -589,7 +604,6 @@ impl Generator {
 
                 /* Expectation */
 
-                #[derive(Default)]
                 pub struct Expectation #ga_types #ga_where {
                     pub times: Times,
                     pub description: Option<String>,
@@ -597,6 +611,19 @@ impl Generator {
                     pub matcher: Option<Box<dyn #temp_lt Matcher<#args_with_lt> + 'mock>>,
                     pub sequence: Option<SequenceHandle>,
                     _marker: PhantomData<&'mock ()>,
+                }
+
+                impl #ga_impl Default for Expectation #ga_types #ga_where {
+                    fn default() -> Self {
+                        Self {
+                            times: Times::default(),
+                            description: None,
+                            action: None,
+                            matcher: None,
+                            sequence: None,
+                            _marker: PhantomData,
+                        }
+                    }
                 }
 
                 impl #ga_impl Expectation #ga_types #ga_where {

@@ -2,16 +2,13 @@ use super::Action;
 
 /* Return */
 
-pub fn return_<T: Clone>(value: T) -> Return<T> {
+pub fn return_<T>(value: T) -> Return<T> {
     Return(value)
 }
 
 pub struct Return<T>(pub T);
 
-impl<T, X> Action<X, T> for Return<T>
-where
-    T: Clone,
-{
+impl<T, X> Action<X, T> for Return<T> {
     fn exec(self, _args: X) -> T {
         self.0
     }
