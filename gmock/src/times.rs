@@ -19,7 +19,7 @@ impl Times {
     }
 
     pub fn is_done(&self) -> bool {
-        self.count.load(Ordering::Relaxed) >= self.range.0.end
+        self.count.load(Ordering::Relaxed) + 1 >= self.range.0.end
     }
 }
 
