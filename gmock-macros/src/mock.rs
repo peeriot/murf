@@ -45,6 +45,8 @@ impl ToTokens for MockableObject {
         }
 
         let ident = self.parsed.object.ident();
+        let mock_ident = format_ident!("{}Mock", ident);
+        let handle_ident = format_ident!("{}Handle", ident);
         let ga = self.parsed.object.generics();
         let (ga_impl, ga_types, ga_where) = ga.split_for_impl();
 
@@ -119,6 +121,9 @@ impl ToTokens for MockableObject {
                     (handle, mock)
                 }
             }
+
+            pub use #module::Mock as #mock_ident;
+            pub use #module::Handle as #handle_ident;
 
             #[allow(unused_parens, non_snake_case)]
             mod #module {
@@ -754,10 +759,10 @@ enum ObjectToMock {
 }
 
 impl ObjectToMock {
-    fn ident(&self) -> TokenStream {
+    fn ident(&self) -> &Ident {
         match self {
-            Self::Enum(o) => o.ident.to_token_stream(),
-            Self::Struct(o) => o.ident.to_token_stream(),
+            Self::Enum(o) => &o.ident,
+            Self::Struct(o) => &o.ident,
         }
     }
 
