@@ -47,9 +47,6 @@ impl ToTokens for MockableObject {
             }
         }
 
-        let ident = self.parsed.object.ident();
-        let mock_ident = format_ident!("{}Mock", ident);
-        let handle_ident = format_ident!("{}Handle", ident);
         let ga = self.parsed.object.generics();
         let (ga_impl, ga_types, ga_where) = ga.split_for_impl();
 
@@ -59,6 +56,12 @@ impl ToTokens for MockableObject {
 
         let ga_mock_tmp = ga_mock.add_lifetime("'mock_tmp");
         let (ga_mock_tmp_impl, _, _) = ga_mock_tmp.split_for_impl();
+
+        let ident = self.parsed.object.ident();
+        let state = quote!(#ident #ga_types);
+        let shared = quote!(Arc<Mutex<Shared #ga_mock_types>>);
+        let mock_ident = format_ident!("{}Mock", ident);
+        let handle_ident = format_ident!("{}Handle", ident);
 
         let expectation_err = format!("Mocked object '{ident}' has unfulfilled expectations");
         let module = format_ident!("mock_impl_{}", ident.to_string().to_case(Case::Snake));
@@ -94,7 +97,7 @@ impl ToTokens for MockableObject {
         });
 
         tokens.extend(quote! {
-            impl #ga_impl #ident #ga_types #ga_where {
+            impl #ga_impl #state #ga_where {
                 pub fn mock<'mock>() -> (
                     #module::Handle #ga_mock_types,
                     #module::Mock #ga_mock_types
@@ -136,6 +139,7 @@ impl ToTokens for MockableObject {
                 use std::mem::transmute;
                 use std::pin::Pin;
 
+                use gmock::{FromState, IntoState};
                 use parking_lot::Mutex;
 
                 use super::*;
@@ -143,20 +147,14 @@ impl ToTokens for MockableObject {
                 /* Mock */
 
                 pub struct Mock #ga_mock_impl #ga_mock_where {
-                    pub state: #ident #ga_types,
-                    pub shared: Arc<Mutex<Shared #ga_mock_types>>,
+                    pub state: #state,
+                    pub shared: #shared,
                 }
 
                 /* IntoState */
 
-                trait IntoState {
-                    type State;
-
-                    fn into_state(self) -> Self::State;
-                }
-
                 impl #ga_mock_impl IntoState for Mock #ga_mock_types #ga_mock_where {
-                    type State = #ident #ga_types;
+                    type State = #state;
 
                     fn into_state(self) -> Self::State {
                         self.state
@@ -164,7 +162,7 @@ impl ToTokens for MockableObject {
                 }
 
                 impl #ga_mock_tmp_impl IntoState for &'mock_tmp Mock #ga_mock_types #ga_mock_where {
-                    type State = &'mock_tmp #ident #ga_types;
+                    type State = &'mock_tmp #state;
 
                     fn into_state(self) -> Self::State {
                         &self.state
@@ -172,7 +170,7 @@ impl ToTokens for MockableObject {
                 }
 
                 impl #ga_mock_tmp_impl IntoState for &'mock_tmp mut Mock #ga_mock_types #ga_mock_where {
-                    type State = &'mock_tmp mut #ident #ga_types;
+                    type State = &'mock_tmp mut #state;
 
                     fn into_state(self) -> Self::State {
                         &mut self.state
@@ -180,17 +178,37 @@ impl ToTokens for MockableObject {
                 }
 
                 impl #ga_mock_tmp_impl IntoState for Pin<&'mock_tmp mut Mock #ga_mock_types> #ga_mock_where {
-                    type State = Pin<&'mock_tmp mut #ident #ga_types>;
+                    type State = Pin<&'mock_tmp mut #state>;
 
                     fn into_state(self) -> Self::State {
                         unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().state) }
                     }
                 }
 
+                /* FromState */
+
+                impl #ga_mock_impl FromState<#state, #shared> for Mock #ga_mock_types #ga_mock_where {
+                    fn from_state(state: #state, shared: #shared) -> Self {
+                        Self {
+                            state,
+                            shared,
+                        }
+                    }
+                }
+
+                impl #ga_mock_impl FromState<Box<#state>, #shared> for Box<Mock #ga_mock_types> #ga_mock_where {
+                    fn from_state(state: Box<#state>, shared: #shared) -> Self {
+                        Box::new(Mock {
+                            state: *state,
+                            shared,
+                        })
+                    }
+                }
+
                 /* Handle */
 
                 pub struct Handle #ga_mock_impl #ga_mock_where {
-                    pub shared: Arc<Mutex<Shared #ga_mock_types>>,
+                    pub shared: #shared,
                 }
 
                 impl #ga_mock_impl Handle #ga_mock_types #ga_mock_where {
@@ -392,6 +410,8 @@ impl Generator {
         let args = method.sig.inputs.without_self().map(|i| &i.pat);
         let args = quote! { ( #( #args ),* ) };
 
+        let self_ty = &impl_.self_ty;
+
         let transmute_args = method.sig.inputs.without_self().map(|i| {
             let pat = &i.pat;
             let ty = i.ty.replace_default_lifetime("'mock");
@@ -413,12 +433,18 @@ impl Generator {
         let default_action = if let Some(t) = trait_ {
             let method = &method.sig.ident;
 
-            quote!(#t::#method)
+            quote!(<#self_ty as #t>::#method)
         } else {
             let t = &impl_.self_ty;
             let method = &method.sig.ident;
 
             quote!(#t::#method)
+        };
+
+        let result = if method.sig.output.contains_self_type() {
+            quote!(Self::from_state(ret, self.shared.clone()))
+        } else {
+            quote!(ret)
         };
 
         let error = if let Some(t) = trait_ {
@@ -476,15 +502,17 @@ impl Generator {
                     }
                 }
 
-                if let Some(action) = &mut ex.action {
-                    return action.exec(args);
+                let ret = if let Some(action) = &mut ex.action {
+                    action.exec(args)
                 } else {
                     drop(shared);
 
                     let #args = args;
 
-                    return #default_action(#default_args);
+                    #default_action(#default_args)
                 };
+
+                return #result;
             }
 
             println!("{}", msg);
@@ -563,17 +591,7 @@ impl Generator {
             None
         };
 
-        let ret = match &method.sig.output {
-            ReturnType::Default => quote! { () },
-            ReturnType::Type(_, t) => {
-                let mut t = t.clone();
-                if let Type::Reference(t) = &mut *t {
-                    t.lifetime = Some(Lifetime::new("'mock", Span::call_site()));
-                }
-
-                quote! { #t }
-            }
-        };
+        let ret = method.sig.output.to_action_return_type(&parsed.object);
 
         let display = if let Some((_, t, _)) = &impl_.trait_ {
             format!(
@@ -927,4 +945,42 @@ impl TypeEx for Type {
 
 lazy_static! {
     static ref DEFAULT_LIFETIME_RX: Regex = Regex::new(r"'_([>, ])").unwrap();
+}
+
+/* ReturnTypeEx */
+
+trait ReturnTypeEx {
+    fn contains_self_type(&self) -> bool;
+    fn to_action_return_type(&self, ty: &ObjectToMock) -> Type;
+}
+
+impl ReturnTypeEx for ReturnType {
+    fn contains_self_type(&self) -> bool {
+        SELF_RETURN_TYPE.is_match(&self.to_token_stream().to_string())
+    }
+
+    fn to_action_return_type(&self, ty: &ObjectToMock) -> Type {
+        if let ReturnType::Type(_, t) = &self {
+            let mut t = t.clone();
+            if let Type::Reference(t) = &mut *t {
+                t.lifetime = Some(Lifetime::new("'mock", Span::call_site()));
+            }
+
+            let ident = ty.ident();
+            let (_, ga_types, _) = ty.generics().split_for_impl();
+            let ty = quote!(#ident #ga_types).to_string();
+
+            let code = t.to_token_stream().to_string();
+            let code = SELF_RETURN_TYPE
+                .replace_all(&code, |c: &Captures| format!("{}{}{}", &c[1], &ty, &c[2]));
+
+            Type::Verbatim(code.parse().unwrap())
+        } else {
+            Type::Verbatim(quote!(()))
+        }
+    }
+}
+
+lazy_static! {
+    static ref SELF_RETURN_TYPE: Regex = Regex::new(r"(^|[^A-Za-z])Self([^A-Za-z]|$)").unwrap();
 }
