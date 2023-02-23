@@ -1,5 +1,6 @@
 mod argument_with_default_lifetime;
 mod associated_type_trait;
+mod exsiting_type;
 mod generic_associated_type_trait;
 mod in_sequence;
 mod no_default;
