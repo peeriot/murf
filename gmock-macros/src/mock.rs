@@ -1,11 +1,12 @@
 use std::mem::take;
 
+use convert_case::{Case, Casing};
 use lazy_static::lazy_static;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use regex::{Captures, Regex};
 use syn::{
-    parse::{Parse, ParseStream},
+    parse::{discouraged::Speculative, Parse, ParseStream},
     parse::{Parser, Result as ParseResult},
     parse2,
     punctuated::Punctuated,
@@ -40,13 +41,12 @@ impl ToTokens for MockableObject {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.parsed.object.to_tokens(tokens);
 
-        for i in &self.parsed.impls {
-            i.to_tokens(tokens);
+        if !self.parsed.object.is_extern() {
+            for i in &self.parsed.impls {
+                i.to_tokens(tokens);
+            }
         }
 
-        let ident = self.parsed.object.ident();
-        let mock_ident = format_ident!("{}Mock", ident);
-        let handle_ident = format_ident!("{}Handle", ident);
         let ga = self.parsed.object.generics();
         let (ga_impl, ga_types, ga_where) = ga.split_for_impl();
 
@@ -57,8 +57,14 @@ impl ToTokens for MockableObject {
         let ga_mock_tmp = ga_mock.add_lifetime("'mock_tmp");
         let (ga_mock_tmp_impl, _, _) = ga_mock_tmp.split_for_impl();
 
+        let ident = self.parsed.object.ident();
+        let state = quote!(#ident #ga_types);
+        let shared = quote!(Arc<Mutex<Shared #ga_mock_types>>);
+        let mock_ident = format_ident!("{}Mock", ident);
+        let handle_ident = format_ident!("{}Handle", ident);
+
         let expectation_err = format!("Mocked object '{ident}' has unfulfilled expectations");
-        let module = format_ident!("mock_impl_{}", ident.to_string());
+        let module = format_ident!("mock_impl_{}", ident.to_string().to_case(Case::Snake));
 
         let mock = &self.generated.mock;
         let handle = &self.generated.handle;
@@ -91,7 +97,7 @@ impl ToTokens for MockableObject {
         });
 
         tokens.extend(quote! {
-            impl #ga_impl #ident #ga_types #ga_where {
+            impl #ga_impl #state #ga_where {
                 pub fn mock<'mock>() -> (
                     #module::Handle #ga_mock_types,
                     #module::Mock #ga_mock_types
@@ -125,7 +131,7 @@ impl ToTokens for MockableObject {
             pub use #module::Mock as #mock_ident;
             pub use #module::Handle as #handle_ident;
 
-            #[allow(unused_parens, non_snake_case)]
+            #[allow(unused_parens)]
             mod #module {
                 use std::sync::Arc;
                 use std::fmt::Write;
@@ -133,27 +139,22 @@ impl ToTokens for MockableObject {
                 use std::mem::transmute;
                 use std::pin::Pin;
 
+                use gmock::{FromState, IntoState};
                 use parking_lot::Mutex;
 
                 use super::*;
 
                 /* Mock */
 
-                pub struct Mock #ga_mock_types #ga_mock_where {
-                    pub state: #ident #ga_types,
-                    pub shared: Arc<Mutex<Shared #ga_mock_impl >>,
+                pub struct Mock #ga_mock_impl #ga_mock_where {
+                    pub state: #state,
+                    pub shared: #shared,
                 }
 
                 /* IntoState */
 
-                trait IntoState {
-                    type State;
-
-                    fn into_state(self) -> Self::State;
-                }
-
                 impl #ga_mock_impl IntoState for Mock #ga_mock_types #ga_mock_where {
-                    type State = #ident #ga_types;
+                    type State = #state;
 
                     fn into_state(self) -> Self::State {
                         self.state
@@ -161,7 +162,7 @@ impl ToTokens for MockableObject {
                 }
 
                 impl #ga_mock_tmp_impl IntoState for &'mock_tmp Mock #ga_mock_types #ga_mock_where {
-                    type State = &'mock_tmp #ident #ga_types;
+                    type State = &'mock_tmp #state;
 
                     fn into_state(self) -> Self::State {
                         &self.state
@@ -169,7 +170,7 @@ impl ToTokens for MockableObject {
                 }
 
                 impl #ga_mock_tmp_impl IntoState for &'mock_tmp mut Mock #ga_mock_types #ga_mock_where {
-                    type State = &'mock_tmp mut #ident #ga_types;
+                    type State = &'mock_tmp mut #state;
 
                     fn into_state(self) -> Self::State {
                         &mut self.state
@@ -177,17 +178,37 @@ impl ToTokens for MockableObject {
                 }
 
                 impl #ga_mock_tmp_impl IntoState for Pin<&'mock_tmp mut Mock #ga_mock_types> #ga_mock_where {
-                    type State = Pin<&'mock_tmp mut #ident #ga_types>;
+                    type State = Pin<&'mock_tmp mut #state>;
 
                     fn into_state(self) -> Self::State {
                         unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().state) }
                     }
                 }
 
+                /* FromState */
+
+                impl #ga_mock_impl FromState<#state, #shared> for Mock #ga_mock_types #ga_mock_where {
+                    fn from_state(state: #state, shared: #shared) -> Self {
+                        Self {
+                            state,
+                            shared,
+                        }
+                    }
+                }
+
+                impl #ga_mock_impl FromState<Box<#state>, #shared> for Box<Mock #ga_mock_types> #ga_mock_where {
+                    fn from_state(state: Box<#state>, shared: #shared) -> Self {
+                        Box::new(Mock {
+                            state: *state,
+                            shared,
+                        })
+                    }
+                }
+
                 /* Handle */
 
-                pub struct Handle #ga_mock_types #ga_mock_where {
-                    pub shared: Arc<Mutex<Shared #ga_mock_impl >>,
+                pub struct Handle #ga_mock_impl #ga_mock_where {
+                    pub shared: #shared,
                 }
 
                 impl #ga_mock_impl Handle #ga_mock_types #ga_mock_where {
@@ -206,7 +227,6 @@ impl ToTokens for MockableObject {
 
                 /* Shared */
 
-                #[allow(non_snake_case)]
                 pub struct Shared #ga_mock_types #ga_mock_where {
                     #( #expectation_field_defs, )*
                     _marker: #ga_mock_phantom,
@@ -266,6 +286,35 @@ struct Parsed {
     impls: Vec<ItemImpl>,
 }
 
+impl Parse for Parsed {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
+        let mut object = input.parse::<ObjectToMock>()?;
+
+        let mut impls = Vec::new();
+        while !input.is_empty() {
+            let impl_ = input.parse::<ItemImpl>()?;
+
+            let ident = match &*impl_.self_ty {
+                Type::Path(p) if p.qself.is_none() && p.path.leading_colon.is_none() && p.path.segments.len() == 1 => &p.path.segments.last().unwrap().ident,
+                _ => return Err(input.error("Expected trait implementation for a simple type that is in the scope of the current module!")),
+            };
+
+            if object.is_unknown() {
+                object = ObjectToMock::Extern {
+                    ident: ident.clone(),
+                    generics: impl_.generics.clone(),
+                };
+            } else if object.ident() != ident {
+                return Err(input.error("Implementing mock traits for different type in the same mock!{} block is not supported!"));
+            }
+
+            impls.push(impl_);
+        }
+
+        Ok(Self { object, impls })
+    }
+}
+
 /* Generator */
 
 #[derive(Default)]
@@ -280,7 +329,7 @@ impl Generator {
         let mut generator = Self::default();
 
         for i in &parsed.impls {
-            generator.generate_impl(i);
+            generator.generate_impl(&parsed, i);
         }
 
         Self::prepare_parsed(&mut parsed);
@@ -291,9 +340,9 @@ impl Generator {
         }
     }
 
-    fn generate_impl(&mut self, impl_: &ItemImpl) {
+    fn generate_impl(&mut self, parsed: &Parsed, impl_: &ItemImpl) {
         for item in &impl_.items {
-            self.generate_item(impl_, item);
+            self.generate_item(parsed, impl_, item);
         }
 
         self.generate_mock_impl(impl_);
@@ -334,11 +383,11 @@ impl Generator {
         })
     }
 
-    fn generate_item(&mut self, impl_: &ItemImpl, item: &ImplItem) {
+    fn generate_item(&mut self, parsed: &Parsed, impl_: &ItemImpl, item: &ImplItem) {
         #[allow(clippy::single_match)]
         match item {
             ImplItem::Type(type_) => self.generate_type(type_),
-            ImplItem::Method(method) => self.generate_method(impl_, method),
+            ImplItem::Method(method) => self.generate_method(parsed, impl_, method),
             _ => (),
         }
     }
@@ -347,10 +396,10 @@ impl Generator {
         self.mock_items.extend(type_.to_token_stream());
     }
 
-    fn generate_method(&mut self, impl_: &ItemImpl, method: &ImplItemMethod) {
+    fn generate_method(&mut self, parsed: &Parsed, impl_: &ItemImpl, method: &ImplItemMethod) {
         self.generate_mock_method(impl_, method.clone());
         self.generate_handle_method(impl_, method);
-        self.generate_expectation_module(impl_, method);
+        self.generate_expectation_module(parsed, impl_, method);
     }
 
     fn generate_mock_method(&mut self, impl_: &ItemImpl, mut method: ImplItemMethod) {
@@ -360,6 +409,8 @@ impl Generator {
 
         let args = method.sig.inputs.without_self().map(|i| &i.pat);
         let args = quote! { ( #( #args ),* ) };
+
+        let self_ty = &impl_.self_ty;
 
         let transmute_args = method.sig.inputs.without_self().map(|i| {
             let pat = &i.pat;
@@ -382,12 +433,18 @@ impl Generator {
         let default_action = if let Some(t) = trait_ {
             let method = &method.sig.ident;
 
-            quote!(#t::#method)
+            quote!(<#self_ty as #t>::#method)
         } else {
             let t = &impl_.self_ty;
             let method = &method.sig.ident;
 
             quote!(#t::#method)
+        };
+
+        let result = if method.sig.output.contains_self_type() {
+            quote!(Self::from_state(ret, self.shared.clone()))
+        } else {
+            quote!(ret)
         };
 
         let error = if let Some(t) = trait_ {
@@ -445,15 +502,17 @@ impl Generator {
                     }
                 }
 
-                if let Some(action) = &mut ex.action {
-                    return action.exec(args);
+                let ret = if let Some(action) = &mut ex.action {
+                    action.exec(args)
                 } else {
                     drop(shared);
 
                     let #args = args;
 
-                    return #default_action(#default_args);
+                    #default_action(#default_args)
                 };
+
+                return #result;
             }
 
             println!("{}", msg);
@@ -477,7 +536,6 @@ impl Generator {
         let (_, ga_types, _) = ga.split_for_impl();
 
         self.handle_items.extend(quote! {
-            #[allow(non_snake_case)]
             pub fn #ident(&self) -> #module::ExpectationBuilder #ga_types {
                 #module::ExpectationBuilder::new(parking_lot::MutexGuard::map(self.shared.lock(), |shared| {
                     let exp = #module::Expectation::default();
@@ -490,12 +548,18 @@ impl Generator {
         })
     }
 
-    fn generate_expectation_module(&mut self, impl_: &ItemImpl, method: &ImplItemMethod) {
+    fn generate_expectation_module(
+        &mut self,
+        parsed: &Parsed,
+        impl_: &ItemImpl,
+        method: &ImplItemMethod,
+    ) {
         let module =
             format_expect_module(&method.sig.ident, impl_.trait_.as_ref().map(|(_, x, _)| x));
 
         let ga = impl_.generics.add_lifetime("'mock");
         let (ga_impl, ga_types, ga_where) = ga.split_for_impl();
+        let ga_phantom = ga.make_phantom_data();
 
         let ga_builder = ga.add_lifetime("'mock_exp");
         let (ga_builder_impl, ga_builder_types, ga_builder_where) = ga_builder.split_for_impl();
@@ -527,17 +591,7 @@ impl Generator {
             None
         };
 
-        let ret = match &method.sig.output {
-            ReturnType::Default => quote! { () },
-            ReturnType::Type(_, t) => {
-                let mut t = t.clone();
-                if let Type::Reference(t) = &mut *t {
-                    t.lifetime = Some(Lifetime::new("'mock", Span::call_site()));
-                }
-
-                quote! { #t }
-            }
-        };
+        let ret = method.sig.output.to_action_return_type(&parsed.object);
 
         let display = if let Some((_, t, _)) = &impl_.trait_ {
             format!(
@@ -550,7 +604,10 @@ impl Generator {
         };
         let display = format!("{}::{}", display, &method.sig.ident);
 
-        let must_use = if Self::need_default_impl(method) && !Self::has_default_impl(method) {
+        let must_use = if Self::need_default_impl(method)
+            && !Self::has_default_impl(method)
+            && !parsed.object.is_extern()
+        {
             Some(
                 quote!(#[must_use = "You need to define an action for this expectation because it has no default action!"]),
             )
@@ -567,7 +624,6 @@ impl Generator {
             .join(", ");
 
         self.result.expectation_modules.extend(quote! {
-            #[allow(non_snake_case)]
             mod #module {
                 use std::marker::PhantomData;
                 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -585,7 +641,7 @@ impl Generator {
                     pub action: Option<Box<dyn #temp_lt RepeatableAction<#args_with_lt, #ret> + 'mock>>,
                     pub matcher: Option<Box<dyn #temp_lt Matcher<#args_with_lt> + 'mock>>,
                     pub sequence: Option<SequenceHandle>,
-                    _marker: PhantomData<&'mock ()>,
+                    _marker: #ga_phantom,
                 }
 
                 impl #ga_impl Default for Expectation #ga_types #ga_where {
@@ -728,19 +784,6 @@ impl Generator {
     }
 }
 
-impl Parse for Parsed {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
-        let object = input.parse()?;
-
-        let mut impls = Vec::new();
-        while !input.is_empty() {
-            impls.push(input.parse()?);
-        }
-
-        Ok(Self { object, impls })
-    }
-}
-
 /* Generated */
 
 #[derive(Default)]
@@ -756,13 +799,25 @@ struct Generated {
 enum ObjectToMock {
     Enum(ItemEnum),
     Struct(ItemStruct),
+    Extern { ident: Ident, generics: Generics },
+    Unknown,
 }
 
 impl ObjectToMock {
+    fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown)
+    }
+
+    fn is_extern(&self) -> bool {
+        matches!(self, Self::Extern { .. })
+    }
+
     fn ident(&self) -> &Ident {
         match self {
             Self::Enum(o) => &o.ident,
             Self::Struct(o) => &o.ident,
+            Self::Extern { ident, .. } => ident,
+            Self::Unknown => panic!("Unknown mock object!"),
         }
     }
 
@@ -770,17 +825,24 @@ impl ObjectToMock {
         match self {
             Self::Enum(o) => &o.generics,
             Self::Struct(o) => &o.generics,
+            Self::Extern { generics, .. } => generics,
+            Self::Unknown => panic!("Unknown mock object!"),
         }
     }
 }
 
 impl Parse for ObjectToMock {
     fn parse(input: ParseStream) -> ParseResult<Self> {
-        match input.parse::<Item>()? {
-            Item::Enum(o) => Ok(ObjectToMock::Enum(o)),
-            Item::Struct(o) => Ok(ObjectToMock::Struct(o)),
-            _ => Err(input.error("Expected either a struct or a enum definition!")),
-        }
+        let fork = input.fork();
+        let ret = match fork.parse::<Item>()? {
+            Item::Enum(o) => Self::Enum(o),
+            Item::Struct(o) => Self::Struct(o),
+            _ => return Ok(Self::Unknown),
+        };
+
+        input.advance_to(&fork);
+
+        Ok(ret)
     }
 }
 
@@ -789,6 +851,7 @@ impl ToTokens for ObjectToMock {
         match self {
             Self::Enum(o) => o.to_tokens(tokens),
             Self::Struct(o) => o.to_tokens(tokens),
+            _ => (),
         }
     }
 }
@@ -805,9 +868,7 @@ impl GenericsEx for Generics {
         let mut ret = self.clone();
 
         if ret.lt_token.is_none() {
-            ret.lt_token = Some(Lt {
-                spans: [Span::call_site()],
-            });
+            ret.lt_token = Some(Lt::default());
         }
 
         ret.params.insert(
@@ -816,9 +877,7 @@ impl GenericsEx for Generics {
         );
 
         if ret.gt_token.is_none() {
-            ret.gt_token = Some(Gt {
-                spans: [Span::call_site()],
-            });
+            ret.gt_token = Some(Gt::default());
         }
 
         ret
@@ -886,4 +945,42 @@ impl TypeEx for Type {
 
 lazy_static! {
     static ref DEFAULT_LIFETIME_RX: Regex = Regex::new(r"'_([>, ])").unwrap();
+}
+
+/* ReturnTypeEx */
+
+trait ReturnTypeEx {
+    fn contains_self_type(&self) -> bool;
+    fn to_action_return_type(&self, ty: &ObjectToMock) -> Type;
+}
+
+impl ReturnTypeEx for ReturnType {
+    fn contains_self_type(&self) -> bool {
+        SELF_RETURN_TYPE.is_match(&self.to_token_stream().to_string())
+    }
+
+    fn to_action_return_type(&self, ty: &ObjectToMock) -> Type {
+        if let ReturnType::Type(_, t) = &self {
+            let mut t = t.clone();
+            if let Type::Reference(t) = &mut *t {
+                t.lifetime = Some(Lifetime::new("'mock", Span::call_site()));
+            }
+
+            let ident = ty.ident();
+            let (_, ga_types, _) = ty.generics().split_for_impl();
+            let ty = quote!(#ident #ga_types).to_string();
+
+            let code = t.to_token_stream().to_string();
+            let code = SELF_RETURN_TYPE
+                .replace_all(&code, |c: &Captures| format!("{}{}{}", &c[1], &ty, &c[2]));
+
+            Type::Verbatim(code.parse().unwrap())
+        } else {
+            Type::Verbatim(quote!(()))
+        }
+    }
+}
+
+lazy_static! {
+    static ref SELF_RETURN_TYPE: Regex = Regex::new(r"(^|[^A-Za-z])Self([^A-Za-z]|$)").unwrap();
 }
