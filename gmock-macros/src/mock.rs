@@ -1,5 +1,6 @@
 use std::mem::take;
 
+use convert_case::{Case, Casing};
 use lazy_static::lazy_static;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
@@ -58,7 +59,7 @@ impl ToTokens for MockableObject {
         let (ga_mock_tmp_impl, _, _) = ga_mock_tmp.split_for_impl();
 
         let expectation_err = format!("Mocked object '{ident}' has unfulfilled expectations");
-        let module = format_ident!("mock_impl_{}", ident.to_string());
+        let module = format_ident!("mock_impl_{}", ident.to_string().to_case(Case::Snake));
 
         let mock = &self.generated.mock;
         let handle = &self.generated.handle;
@@ -125,7 +126,7 @@ impl ToTokens for MockableObject {
             pub use #module::Mock as #mock_ident;
             pub use #module::Handle as #handle_ident;
 
-            #[allow(unused_parens, non_snake_case)]
+            #[allow(unused_parens)]
             mod #module {
                 use std::sync::Arc;
                 use std::fmt::Write;
@@ -206,7 +207,6 @@ impl ToTokens for MockableObject {
 
                 /* Shared */
 
-                #[allow(non_snake_case)]
                 pub struct Shared #ga_mock_types #ga_mock_where {
                     #( #expectation_field_defs, )*
                     _marker: #ga_mock_phantom,
@@ -477,7 +477,6 @@ impl Generator {
         let (_, ga_types, _) = ga.split_for_impl();
 
         self.handle_items.extend(quote! {
-            #[allow(non_snake_case)]
             pub fn #ident(&self) -> #module::ExpectationBuilder #ga_types {
                 #module::ExpectationBuilder::new(parking_lot::MutexGuard::map(self.shared.lock(), |shared| {
                     let exp = #module::Expectation::default();
@@ -567,7 +566,6 @@ impl Generator {
             .join(", ");
 
         self.result.expectation_modules.extend(quote! {
-            #[allow(non_snake_case)]
             mod #module {
                 use std::marker::PhantomData;
                 use std::fmt::{Display, Formatter, Result as FmtResult};
