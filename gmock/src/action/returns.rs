@@ -6,6 +6,7 @@ pub fn return_<T>(value: T) -> Return<T> {
     Return(value)
 }
 
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Return<T>(pub T);
 
 impl<T, X> Action<X, T> for Return<T> {
@@ -20,6 +21,7 @@ pub fn return_ref<T>(value: &T) -> ReturnRef<'_, T> {
     ReturnRef(value)
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct ReturnRef<'a, T>(pub &'a T);
 
 impl<'a, T, X> Action<X, &'a T> for ReturnRef<'a, T> {
