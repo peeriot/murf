@@ -7,7 +7,10 @@ pub fn format_expect_call(method: &Ident, as_trait: Option<&Path>) -> Ident {
     if let Some(t) = as_trait {
         format_ident!(
             "as_{}_expect_{}",
-            t.to_token_stream().to_string().to_case(Case::Snake),
+            t.to_token_stream()
+                .to_string()
+                .replace(|c: char| !c.is_alphanumeric(), "_")
+                .to_case(Case::Snake),
             method
         )
     } else {
@@ -19,7 +22,10 @@ pub fn format_expect_module(method: &Ident, as_trait: Option<&Path>) -> Ident {
     if let Some(t) = as_trait {
         format_ident!(
             "mock_trait_{}_method_{}",
-            t.to_token_stream().to_string().to_case(Case::Snake),
+            t.to_token_stream()
+                .to_string()
+                .replace(|c: char| !c.is_alphanumeric(), "_")
+                .to_case(Case::Snake),
             method
         )
     } else {

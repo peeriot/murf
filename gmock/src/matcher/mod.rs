@@ -1,4 +1,5 @@
 mod any;
+mod closure;
 mod compare;
 mod multi;
 mod range;
@@ -7,6 +8,7 @@ mod string;
 use std::fmt::{Formatter, Result as FmtResult};
 
 pub use any::{any, Any};
+pub use closure::{closure, Closure};
 pub use compare::{eq, ge, gt, le, lt, ne, Eq, Ge, Gt, Le, Lt, Ne};
 pub use multi::{multi, Multi};
 pub use range::{range, Range};
