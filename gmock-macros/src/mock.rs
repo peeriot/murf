@@ -1,4 +1,5 @@
-use std::mem::take;
+use std::cell::UnsafeCell;
+use std::mem::{take, transmute};
 
 use convert_case::{Case, Casing};
 use lazy_static::lazy_static;
@@ -6,14 +7,14 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use regex::{Captures, Regex};
 use syn::{
-    parse::{discouraged::Speculative, Parse, ParseStream},
-    parse::{Parser, Result as ParseResult},
+    parse::{discouraged::Speculative, Parse, ParseStream, Parser, Result as ParseResult},
     parse2,
     punctuated::Punctuated,
     token::{Comma, Gt, Lt},
     Attribute, FnArg, GenericArgument, GenericParam, Generics, ImplItem, ImplItemMethod,
-    ImplItemType, Item, ItemEnum, ItemImpl, ItemStruct, Lifetime, LifetimeDef, PatType, Path,
-    PathArguments, ReturnType, Stmt, Token, Type, WherePredicate,
+    ImplItemType, Item, ItemEnum, ItemImpl, ItemStruct, Lifetime, LifetimeDef, Meta, NestedMeta,
+    PatType, Path, PathArguments, PathSegment, ReturnType, Stmt, Token, Type, TypePath,
+    WherePredicate,
 };
 
 use crate::misc::{format_expect_call, format_expect_module, format_expectations_field};
@@ -54,6 +55,21 @@ impl ToTokens for MockableObject {
         let ga_mock = ga.add_lifetime("'mock");
         let (ga_mock_impl, ga_mock_types, ga_mock_where) = ga_mock.split_for_impl();
         let ga_mock_phantom = ga_mock.make_phantom_data();
+
+        let mock_default_clone_impl = if self.parsed.object.derives("Clone") {
+            Some(quote! {
+                impl #ga_mock_impl Clone for Mock #ga_mock_types #ga_mock_where {
+                    fn clone(&self) -> Self {
+                        Self {
+                            state: self.state.clone(),
+                            shared: self.shared.clone(),
+                        }
+                    }
+                }
+            })
+        } else {
+            None
+        };
 
         let ga_mock_tmp = ga_mock.add_lifetime("'mock_tmp");
         let (ga_mock_tmp_impl, _, _) = ga_mock_tmp.split_for_impl();
@@ -151,6 +167,8 @@ impl ToTokens for MockableObject {
                     pub state: #state,
                     pub shared: #shared,
                 }
+
+                #mock_default_clone_impl
 
                 /* IntoState */
 
@@ -357,8 +375,8 @@ impl Generator {
         let ga_mock = object.generics().add_lifetime("'mock");
         let (_ga_mock_impl, ga_mock_types, _ga_mock_where) = ga_mock.split_for_impl();
 
-        let trait_ = impl_.trait_.as_ref().map(|x| {
-            let x = x.1.to_token_stream();
+        let trait_ = impl_.trait_.as_ref().map(|(_, path, _)| {
+            let x = path.to_token_stream();
 
             quote! {
                 #x for
@@ -411,12 +429,12 @@ impl Generator {
         let module = format_expect_module(&method.sig.ident, trait_);
         let field = format_expectations_field(&module);
 
-        let args = method.sig.inputs.without_self().map(|i| &i.pat);
+        let args = method.sig.inputs.without_self_arg().map(|i| &i.pat);
         let args = quote! { ( #( #args ),* ) };
 
         let self_ty = &impl_.self_ty;
 
-        let transmute_args = method.sig.inputs.without_self().map(|i| {
+        let transmute_args = method.sig.inputs.without_self_arg().map(|i| {
             let pat = &i.pat;
             let ty = &i.ty; // TODO .replace_default_lifetime(&mut );
 
@@ -452,11 +470,7 @@ impl Generator {
         };
 
         let error = if let Some(t) = trait_ {
-            format!(
-                "<{} as {}>",
-                impl_.self_ty.to_token_stream(),
-                t.to_token_stream()
-            )
+            format!("<{} as {}>", impl_.self_ty.to_token_stream(), t.to_string())
         } else {
             format!("{}", impl_.self_ty.to_token_stream())
         };
@@ -468,14 +482,14 @@ impl Generator {
         let block = quote! {
             #( #transmute_args )*
 
-            let mut shared = self.shared.lock();
+            let mut locked = self.shared.lock();
             let args = #args;
 
             let mut msg = String::new();
             let _ = writeln!(msg, #error);
             let _ = writeln!(msg, "Tried the following expectations:");
 
-            for ex in &mut shared.#field {
+            for ex in &mut locked.#field {
                 let _ = writeln!(msg, "- {}", ex);
                 if !ex.matches(&args) {
                     let _ = writeln!(msg, "    does not match");
@@ -509,7 +523,7 @@ impl Generator {
                 let ret = if let Some(action) = &mut ex.action {
                     action.exec(args)
                 } else {
-                    drop(shared);
+                    drop(locked);
 
                     let #args = args;
 
@@ -573,17 +587,27 @@ impl Generator {
         let (impl_, lts) = impl_.split_off_temp_lifetimes();
         let mut lts_mock = lts.clone();
 
-        let ga = impl_.generics.add_lifetime("'mock");
-        let (ga_impl, ga_types, ga_where) = ga.split_for_impl();
-        let ga_phantom = ga.make_phantom_data();
+        let ga = parsed.object.generics();
+        let (_ga_impl, ga_types, _ga_where) = ga.split_for_impl();
 
-        let ga_builder = ga.add_lifetime("'mock_exp");
+        let ga_mock = impl_.generics.add_lifetime("'mock");
+        let (ga_mock_impl, ga_mock_types, ga_mock_where) = ga_mock.split_for_impl();
+        let ga_mock_phantom = ga_mock.make_phantom_data();
+
+        let ga_builder = ga_mock.add_lifetime("'mock_exp");
         let (ga_builder_impl, ga_builder_types, ga_builder_where) = ga_builder.split_for_impl();
 
-        let args = method.sig.inputs.without_self().map(|i| &i.ty);
+        let type_ = Type::from_ident(parsed.object.ident().clone());
+        let type_ = Type::Verbatim(quote!( #type_ #ga_types ));
+
+        let args = method
+            .sig
+            .inputs
+            .without_self_arg()
+            .map(|i| i.ty.clone().replace_self_type_owned(&type_));
         let args = quote! { ( #( #args ),* ) };
 
-        let args_with_lt = method.sig.inputs.without_self().map(|i| match &*i.ty {
+        let args_with_lt = method.sig.inputs.without_self_arg().map(|i| match &*i.ty {
             Type::Reference(t) => {
                 let mut t = t.clone();
                 t.lifetime = Some(lts_mock.generate());
@@ -648,16 +672,16 @@ impl Generator {
 
                 /* Expectation */
 
-                pub struct Expectation #ga_types #ga_where {
+                pub struct Expectation #ga_mock_types #ga_mock_where {
                     pub times: Times,
                     pub description: Option<String>,
                     pub action: Option<Box<dyn #lts_mock RepeatableAction<#args_with_lt, #ret> + 'mock>>,
                     pub matcher: Option<Box<dyn #lts_mock Matcher<#args_with_lt> + 'mock>>,
                     pub sequence: Option<SequenceHandle>,
-                    _marker: #ga_phantom,
+                    _marker: #ga_mock_phantom,
                 }
 
-                impl #ga_impl Default for Expectation #ga_types #ga_where {
+                impl #ga_mock_impl Default for Expectation #ga_mock_types #ga_mock_where {
                     fn default() -> Self {
                         Self {
                             times: Times::default(),
@@ -670,7 +694,7 @@ impl Generator {
                     }
                 }
 
-                impl #ga_impl Expectation #ga_types #ga_where {
+                impl #ga_mock_impl Expectation #ga_mock_types #ga_mock_where {
                     pub fn matches #lts (&self, args: &#args) -> bool {
                         if let Some(m) = &self.matcher {
                             m.matches(args)
@@ -680,7 +704,7 @@ impl Generator {
                     }
                 }
 
-                impl #ga_impl Display for Expectation #ga_types #ga_where {
+                impl #ga_mock_impl Display for Expectation #ga_mock_types #ga_mock_where {
                     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
                         write!(f, #display)?;
 
@@ -704,11 +728,11 @@ impl Generator {
 
                 #must_use
                 pub struct ExpectationBuilder #ga_builder_types #ga_builder_where {
-                    guard: MappedMutexGuard<'mock_exp, Expectation #ga_types>,
+                    guard: MappedMutexGuard<'mock_exp, Expectation #ga_mock_types>,
                 }
 
                 impl #ga_builder_impl ExpectationBuilder #ga_builder_types #ga_builder_where {
-                    pub fn new(mut guard: MappedMutexGuard<'mock_exp, Expectation #ga_types>) -> Self {
+                    pub fn new(mut guard: MappedMutexGuard<'mock_exp, Expectation #ga_mock_types>) -> Self {
                         guard.sequence = InSequence::create_handle();
                         guard.times.range = (1..usize::max_value()).into();
 
@@ -841,6 +865,37 @@ impl ObjectToMock {
             Self::Extern { generics, .. } => generics,
             Self::Unknown => panic!("Unknown mock object!"),
         }
+    }
+
+    fn attributes(&self) -> &[Attribute] {
+        match self {
+            Self::Enum(o) => &o.attrs,
+            Self::Struct(o) => &o.attrs,
+            Self::Extern { .. } => &[],
+            Self::Unknown => panic!("Unknown mock object!"),
+        }
+    }
+
+    fn derives(&self, ident: &str) -> bool {
+        self.attributes().iter().any(|attr| {
+            if let Ok(Meta::List(ml)) = attr.parse_meta() {
+                let i = ml.path.get_ident();
+                if i.map_or(false, |i| *i == "derive") {
+                    ml.nested.iter().any(|nm| {
+                        if let NestedMeta::Meta(m) = nm {
+                            let i = m.path().get_ident();
+                            i.map_or(false, |i| *i == ident)
+                        } else {
+                            false
+                        }
+                    })
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        })
     }
 }
 
@@ -1011,13 +1066,13 @@ trait InputsEx {
     where
         Self: 'x;
 
-    fn without_self(&self) -> Self::Iter<'_>;
+    fn without_self_arg(&self) -> Self::Iter<'_>;
 }
 
 impl InputsEx for Punctuated<FnArg, Token![,]> {
     type Iter<'x> = Box<dyn Iterator<Item = &'x PatType> + 'x>;
 
-    fn without_self(&self) -> Self::Iter<'_> {
+    fn without_self_arg(&self) -> Self::Iter<'_> {
         Box::new(self.iter().filter_map(|i| match i {
             FnArg::Receiver(_) => None,
             FnArg::Typed(t) if t.pat.to_token_stream().to_string() == "self" => None,
@@ -1029,96 +1084,197 @@ impl InputsEx for Punctuated<FnArg, Token![,]> {
 /* TypeEx */
 
 trait TypeEx: Clone {
+    fn from_ident(ident: Ident) -> Self;
+    fn contains_lifetime(&self, lt: &Lifetime) -> bool;
+    fn replace_self_type(&mut self, type_: &Type);
     fn replace_default_lifetime(&mut self, lts: &mut TempLifetimes);
+
+    fn replace_self_type_owned(mut self, type_: &Type) -> Self {
+        self.replace_self_type(type_);
+
+        self
+    }
 
     fn replace_default_lifetime_owned(mut self, lts: &mut TempLifetimes) -> Self {
         self.replace_default_lifetime(lts);
 
         self
     }
+}
 
-    fn contains_lifetime(&self, lt: &Lifetime) -> bool;
+trait TypeVisitor {
+    fn visit_type(&mut self, ty: &UnsafeCell<Type>) -> bool {
+        let _ty = ty;
+
+        true
+    }
+
+    fn visit_lifetime(&mut self, lt: &UnsafeCell<Lifetime>) -> bool {
+        let _lt = lt;
+
+        true
+    }
+
+    fn visit(&mut self, ty: &UnsafeCell<Type>) -> bool {
+        if !self.visit_type(ty) {
+            return false;
+        }
+
+        let ty = unsafe { &*ty.get() };
+
+        match ty {
+            Type::Path(ty) => {
+                for seg in &ty.path.segments {
+                    match &seg.arguments {
+                        PathArguments::None => (),
+                        PathArguments::AngleBracketed(x) => {
+                            for arg in &x.args {
+                                match arg {
+                                    GenericArgument::Type(t) => {
+                                        if !self.visit(as_unsafe_cell(t)) {
+                                            return false;
+                                        }
+                                    }
+                                    GenericArgument::Lifetime(lt) => {
+                                        if !self.visit_lifetime(as_unsafe_cell(lt)) {
+                                            return false;
+                                        }
+                                    }
+                                    _ => (),
+                                }
+                            }
+                        }
+                        PathArguments::Parenthesized(x) => {
+                            for t in &x.inputs {
+                                if !self.visit(as_unsafe_cell(t)) {
+                                    return false;
+                                }
+                            }
+
+                            match &x.output {
+                                ReturnType::Type(_, t) => {
+                                    if !self.visit(as_unsafe_cell(t)) {
+                                        return false;
+                                    }
+                                }
+                                ReturnType::Default => (),
+                            }
+                        }
+                    }
+                }
+
+                true
+            }
+            Type::Reference(t) => {
+                if let Some(lt) = &t.lifetime {
+                    if !self.visit_lifetime(as_unsafe_cell(lt)) {
+                        return false;
+                    }
+                }
+
+                if !self.visit(as_unsafe_cell(&t.elem)) {
+                    return false;
+                }
+
+                true
+            }
+            Type::Array(t) => self.visit(as_unsafe_cell(&t.elem)),
+            Type::Slice(t) => self.visit(as_unsafe_cell(&t.elem)),
+            Type::Tuple(t) => {
+                for t in &t.elems {
+                    if !self.visit(as_unsafe_cell(t)) {
+                        return false;
+                    }
+                }
+
+                true
+            }
+            _ => true,
+        }
+    }
 }
 
 impl TypeEx for Type {
-    fn replace_default_lifetime(&mut self, lts: &mut TempLifetimes) {
-        #[allow(clippy::single_match)]
-        match self {
-            Type::Path(p) => {
-                for seg in &mut p.path.segments {
-                    match &mut seg.arguments {
-                        PathArguments::None => (),
-                        PathArguments::AngleBracketed(args) => {
-                            for arg in &mut args.args {
-                                match arg {
-                                    GenericArgument::Lifetime(x) if x.ident == "_" => {
-                                        x.ident = lts.generate().ident;
-                                    }
-                                    GenericArgument::Type(t) => t.replace_default_lifetime(lts),
-                                    _ => (),
-                                }
-                            }
-                        }
-                        PathArguments::Parenthesized(args) => {
-                            for input in &mut args.inputs {
-                                input.replace_default_lifetime(lts);
-                            }
+    fn from_ident(ident: Ident) -> Self {
+        let mut path = Path {
+            leading_colon: None,
+            segments: Punctuated::default(),
+        };
+        path.segments.push(PathSegment {
+            ident,
+            arguments: PathArguments::None,
+        });
 
-                            if let ReturnType::Type(_, t) = &mut args.output {
-                                t.replace_default_lifetime(lts);
-                            }
-                        }
-                    }
-                }
-            }
-            Type::Reference(r) => r.elem.replace_default_lifetime(lts),
-            _ => (),
-        }
+        Self::Path(TypePath { qself: None, path })
     }
 
     fn contains_lifetime(&self, lt: &Lifetime) -> bool {
-        #[allow(clippy::single_match)]
-        match self {
-            Type::Path(p) => {
-                for seg in &p.path.segments {
-                    match &seg.arguments {
-                        PathArguments::None => (),
-                        PathArguments::AngleBracketed(args) => {
-                            for arg in &args.args {
-                                match arg {
-                                    GenericArgument::Lifetime(x) if x == lt => return true,
-                                    GenericArgument::Type(t) if t.contains_lifetime(lt) => {
-                                        return true
-                                    }
-                                    _ => (),
-                                }
-                            }
-                        }
-                        PathArguments::Parenthesized(args) => {
-                            for input in &args.inputs {
-                                if input.contains_lifetime(lt) {
-                                    return true;
-                                }
-                            }
+        struct Visitor<'a> {
+            lt: &'a Lifetime,
+            result: bool,
+        }
 
-                            if matches!(&args.output, ReturnType::Type(_, t) if t.contains_lifetime(lt))
-                            {
-                                return true;
-                            }
-                        }
+        impl<'a> TypeVisitor for Visitor<'a> {
+            fn visit_lifetime(&mut self, lt: &UnsafeCell<Lifetime>) -> bool {
+                let lt = unsafe { &*lt.get() };
+                self.result = self.lt.ident == lt.ident || self.result;
+
+                !self.result
+            }
+        }
+
+        let mut visitor = Visitor { lt, result: false };
+
+        visitor.visit(as_unsafe_cell(self));
+
+        visitor.result
+    }
+
+    fn replace_self_type(&mut self, type_: &Type) {
+        struct Visitor<'a> {
+            type_: &'a Type,
+        }
+
+        impl<'a> TypeVisitor for Visitor<'a> {
+            fn visit_type(&mut self, ty: &UnsafeCell<Type>) -> bool {
+                let ty = unsafe { &mut *ty.get() };
+
+                if let Type::Path(t) = ty {
+                    if t.path.segments.len() == 1 && t.path.segments[0].ident == "Self" {
+                        *ty = self.type_.clone();
                     }
                 }
 
-                false
+                true
             }
-            Type::Reference(r) => r.elem.contains_lifetime(lt),
-            _ => false,
         }
-    }
-}
 
-lazy_static! {
-    static ref DEFAULT_LIFETIME_RX: Regex = Regex::new(r"'_([>, ])").unwrap();
+        let mut visitor = Visitor { type_ };
+
+        visitor.visit(as_unsafe_cell(self));
+    }
+
+    fn replace_default_lifetime(&mut self, lts: &mut TempLifetimes) {
+        struct Visitor<'a> {
+            lts: &'a mut TempLifetimes,
+        }
+
+        impl<'a> TypeVisitor for Visitor<'a> {
+            fn visit_lifetime(&mut self, lt: &UnsafeCell<Lifetime>) -> bool {
+                let lt = unsafe { &mut *lt.get() };
+
+                if lt.ident == "_" {
+                    *lt = self.lts.generate();
+                }
+
+                true
+            }
+        }
+
+        let mut visitor = Visitor { lts };
+
+        visitor.visit(as_unsafe_cell(self));
+    }
 }
 
 /* ReturnTypeEx */
@@ -1135,20 +1291,16 @@ impl ReturnTypeEx for ReturnType {
 
     fn to_action_return_type(&self, ty: &ObjectToMock) -> Type {
         if let ReturnType::Type(_, t) = &self {
-            let mut t = t.clone();
-            if let Type::Reference(t) = &mut *t {
+            let ident = ty.ident();
+            let (_, ga_types, _) = ty.generics().split_for_impl();
+            let ty = parse2(quote!(#ident #ga_types)).unwrap();
+
+            let mut t = t.clone().replace_self_type_owned(&ty);
+            if let Type::Reference(t) = &mut t {
                 t.lifetime = Some(Lifetime::new("'mock", Span::call_site()));
             }
 
-            let ident = ty.ident();
-            let (_, ga_types, _) = ty.generics().split_for_impl();
-            let ty = quote!(#ident #ga_types).to_string();
-
-            let code = t.to_token_stream().to_string();
-            let code = SELF_RETURN_TYPE
-                .replace_all(&code, |c: &Captures| format!("{}{}{}", &c[1], &ty, &c[2]));
-
-            Type::Verbatim(code.parse().unwrap())
+            t
         } else {
             Type::Verbatim(quote!(()))
         }
@@ -1177,4 +1329,10 @@ impl PathEx for Path {
 
 lazy_static! {
     static ref PATH_FORMAT: Regex = Regex::new(r"\s*(<|>)\s*").unwrap();
+}
+
+/* Misc */
+
+fn as_unsafe_cell<T>(value: &T) -> &UnsafeCell<T> {
+    unsafe { transmute(value) }
 }
