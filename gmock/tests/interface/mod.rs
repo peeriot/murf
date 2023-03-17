@@ -8,5 +8,6 @@ mod in_sequence;
 mod no_default;
 mod reference_argument;
 mod return_self_type;
+mod self_arc;
 mod sequence;
 mod simple_trait;
