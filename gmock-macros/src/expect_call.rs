@@ -3,12 +3,11 @@ use std::borrow::Cow;
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
-    parenthesized,
     parse::{Parse, ParseStream},
     parse2,
     punctuated::Punctuated,
-    token::{As, Comma},
-    Expr, Path, Result as ParseResult, Token,
+    token::Comma,
+    Expr, ExprCall, Path, Result as ParseResult, Token, Type,
 };
 
 use crate::misc::format_expect_call;
@@ -25,7 +24,7 @@ pub fn exec(input: TokenStream) -> TokenStream {
 }
 
 struct Call {
-    obj: Ident,
+    obj: Box<Expr>,
     as_trait: Option<Path>,
     method: Ident,
     args: Punctuated<Expr, Comma>,
@@ -34,28 +33,32 @@ struct Call {
 impl Parse for Call {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         let obj = input.parse()?;
-        let as_trait = if input.peek(As) {
-            input.parse::<As>()?;
 
-            Some(input.parse()?)
+        let (obj, as_trait) = if let Expr::Cast(o) = obj {
+            if let Type::Path(as_trait) = *o.ty {
+                (o.expr, Some(as_trait.path))
+            } else {
+                return Err(input.error("Expect trait path"));
+            }
         } else {
-            None
+            (Box::new(obj), None)
         };
 
         input.parse::<Token![,]>()?;
-        let method = input.parse()?;
 
-        let content;
-        parenthesized!(content in input);
+        let call: ExprCall = input.parse()?;
 
-        let mut args = Punctuated::new();
-        while !content.is_empty() {
-            if !args.is_empty() {
-                content.parse::<Token![,]>()?;
+        let method = if let Expr::Path(p) = *call.func {
+            if let Some(method) = p.path.get_ident() {
+                method.clone()
+            } else {
+                return Err(input.error("Expect method identifier"));
             }
+        } else {
+            return Err(input.error("Expect method identifier"));
+        };
 
-            args.push(content.parse()?);
-        }
+        let args = call.args;
 
         Ok(Self {
             obj,
