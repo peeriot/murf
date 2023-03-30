@@ -2,7 +2,7 @@ mod invoke;
 mod returns;
 
 pub use invoke::{invoke, Invoke};
-pub use returns::{return_, return_ref, Return, ReturnRef};
+pub use returns::{return_, return_pointee, return_ref, Return, ReturnPointee, ReturnRef};
 
 /* Action */
 
