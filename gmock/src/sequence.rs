@@ -47,6 +47,10 @@ impl SequenceHandle {
         self.inner.lock().set_ready(self.id);
     }
 
+    pub fn set_done(&self) {
+        self.inner.lock().set_done(self.id);
+    }
+
     pub fn set_description(&self, value: String) {
         self.inner.lock().set_description(self.id, value);
     }
@@ -192,6 +196,12 @@ impl Inner {
 
     fn set_ready(&mut self, id: usize) {
         self.item_mut(id).is_ready = true;
+    }
+
+    fn set_done(&mut self, id: usize) {
+        if self.current_id == id {
+            self.current_id += 1;
+        }
     }
 
     fn set_description(&mut self, id: usize, value: String) {

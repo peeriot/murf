@@ -248,6 +248,10 @@ impl ToTokens for MockableObject {
                                     }
 
                                     println!("- {}", &ex);
+                                } else {
+                                    for seq_handle in &ex.sequences {
+                                        seq_handle.set_done();
+                                    }
                                 }
                             }
 
@@ -771,7 +775,7 @@ impl Generator {
                 impl #ga_builder_impl ExpectationBuilder #ga_builder_types #ga_builder_where {
                     pub fn new(mut guard: MappedMutexGuard<'mock_exp, Expectation #ga_mock_types>) -> Self {
                         guard.sequences = InSequence::create_handle().into_iter().collect();
-                        guard.times.range = (1..usize::max_value()).into();
+                        guard.times.range = (1..).into();
 
                         Self {
                             guard,

@@ -12,3 +12,4 @@ mod return_self_type;
 mod self_arc;
 mod sequence;
 mod simple_trait;
+mod times;
