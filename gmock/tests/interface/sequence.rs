@@ -37,3 +37,31 @@ fn failure() {
     mock.fuu(2);
     mock.fuu(1);
 }
+
+#[test]
+fn multi_sequence() {
+    let seq0 = Sequence::default();
+    let seq1 = Sequence::default();
+
+    let (handle, mock) = MyStruct::mock();
+
+    expect_call!(handle as Fuu, fuu(eq(1))).add_sequence(&seq0);
+    expect_call!(handle as Fuu, fuu(eq(2))).add_sequence(&seq1);
+    expect_call!(handle as Fuu, fuu(eq(3)))
+        .add_sequence(&seq0)
+        .add_sequence(&seq1);
+    mock.fuu(1);
+    mock.fuu(2);
+    mock.fuu(3);
+    handle.checkpoint();
+
+    expect_call!(handle as Fuu, fuu(eq(1))).add_sequence(&seq0);
+    expect_call!(handle as Fuu, fuu(eq(2))).add_sequence(&seq1);
+    expect_call!(handle as Fuu, fuu(eq(3)))
+        .add_sequence(&seq0)
+        .add_sequence(&seq1);
+    mock.fuu(2);
+    mock.fuu(1);
+    mock.fuu(3);
+    handle.checkpoint();
+}

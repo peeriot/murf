@@ -122,7 +122,7 @@ impl ToTokens for MockableObject {
                 use std::sync::Arc;
                 use std::fmt::Write;
                 use std::marker::PhantomData;
-                use std::mem::transmute;
+                use std::mem::{take, transmute};
                 use std::pin::Pin;
 
                 use parking_lot::Mutex;
@@ -512,19 +512,29 @@ impl Generator {
                 }
 
                 let _ = writeln!(msg, "    is not done yet");
-                if let Some(sequence) = &ex.sequence {
-                    if !sequence.check() {
-                        let _ = writeln!(msg, "    but is not active");
 
-                        continue;
+                let mut is_active = true;
+                for seq_handle in &ex.sequences {
+                    if !seq_handle.check() {
+                        if take(&mut is_active) {
+                            let _ = writeln!(msg, "    but is not active");
+                        }
+
+                        let _ = writeln!(msg, "      sequence #{} has unsatisfied expectations", seq_handle.sequence_id());
+                        for ex in seq_handle.unsatisfied() {
+                            let _ = writeln!(msg, "        - {}", ex);
+                        }
                     }
+                }
+                if !is_active {
+                    continue;
                 }
 
                 ex.times.increment();
 
-                if let Some(sequence) = &ex.sequence {
-                    if ex.times.is_ready() {
-                        sequence.set_ready();
+                if ex.times.is_ready() {
+                    for seq_handle in &ex.sequences {
+                        seq_handle.set_ready();
                     }
                 }
 
@@ -701,7 +711,7 @@ impl Generator {
                     pub description: Option<String>,
                     pub action: Option<Box<dyn #lts_mock RepeatableAction<#args_with_lt, #ret> #trait_send #trait_sync + 'mock>>,
                     pub matcher: Option<Box<dyn #lts_mock Matcher<#args_with_lt> #trait_send #trait_sync + 'mock>>,
-                    pub sequence: Option<SequenceHandle>,
+                    pub sequences: Vec<SequenceHandle>,
                     _marker: #ga_mock_phantom,
                 }
 
@@ -712,7 +722,7 @@ impl Generator {
                             description: None,
                             action: None,
                             matcher: None,
-                            sequence: None,
+                            sequences: Vec::new(),
                             _marker: PhantomData,
                         }
                     }
@@ -751,13 +761,13 @@ impl Generator {
                 /* ExpectationBuilder */
 
                 #must_use
-                pub struct ExpectationBuilder #ga_builder_types #ga_builder_where {
+                pub struct ExpectationBuilder #ga_builder_impl #ga_builder_where {
                     guard: MappedMutexGuard<'mock_exp, Expectation #ga_mock_types>,
                 }
 
                 impl #ga_builder_impl ExpectationBuilder #ga_builder_types #ga_builder_where {
                     pub fn new(mut guard: MappedMutexGuard<'mock_exp, Expectation #ga_mock_types>) -> Self {
-                        guard.sequence = InSequence::create_handle();
+                        guard.sequences = InSequence::create_handle().into_iter().collect();
                         guard.times.range = (1..usize::max_value()).into();
 
                         Self {
@@ -778,7 +788,19 @@ impl Generator {
                     }
 
                     pub fn in_sequence(mut self, sequence: &Sequence) -> Self {
-                        self.guard.sequence = Some(sequence.create_handle());
+                        self.guard.sequences = vec![ sequence.create_handle() ];
+
+                        self
+                    }
+
+                    pub fn add_sequence(mut self, sequence: &Sequence) -> Self {
+                        self.guard.sequences.push(sequence.create_handle());
+
+                        self
+                    }
+
+                    pub fn no_sequences(mut self) -> Self {
+                        self.guard.sequences.clear();
 
                         self
                     }
@@ -801,6 +823,14 @@ impl Generator {
                         A: #lts_mock Action<#args_with_lt, #ret> #trait_send #trait_sync + Clone + 'mock,
                     {
                         self.guard.action = Some(Box::new(RepeatedAction::new(action)));
+                    }
+                }
+
+                impl #ga_builder_impl Drop for ExpectationBuilder #ga_builder_types #ga_builder_where {
+                    fn drop(&mut self) {
+                        for seq_handle in &self.guard.sequences {
+                            seq_handle.set_description(self.guard.to_string());
+                        }
                     }
                 }
             }
