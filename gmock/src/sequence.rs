@@ -1,7 +1,8 @@
 use std::cell::UnsafeCell;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 
 /* Sequence */
 
@@ -22,9 +23,11 @@ impl Sequence {
 
 /* SequenceHandle */
 
+#[derive(Debug)]
 pub struct SequenceHandle {
     id: usize,
     inner: Arc<Mutex<Inner>>,
+    sequence_id: usize,
 }
 
 impl SequenceHandle {
@@ -32,8 +35,67 @@ impl SequenceHandle {
         self.inner.lock().check(self.id)
     }
 
+    pub fn sequence_id(&self) -> usize {
+        self.sequence_id
+    }
+
     pub fn set_ready(&self) {
         self.inner.lock().set_ready(self.id);
+    }
+
+    pub fn set_description(&self, value: String) {
+        self.inner.lock().set_description(self.id, value);
+    }
+
+    pub fn unsatisfied(&self) -> Unsatisfied<'_> {
+        Unsatisfied::new(self)
+    }
+}
+
+impl Drop for SequenceHandle {
+    fn drop(&mut self) {
+        self.inner.lock().set_ready(self.id);
+    }
+}
+
+/* Unsatisfied */
+
+pub struct Unsatisfied<'a> {
+    guard: MutexGuard<'a, Inner>,
+    id_end: usize,
+    id_current: usize,
+}
+
+impl<'a> Unsatisfied<'a> {
+    fn new(seq_handle: &'a SequenceHandle) -> Self {
+        let guard = seq_handle.inner.lock();
+        let id_end = seq_handle.id;
+        let id_current = guard.current_id;
+
+        Self {
+            guard,
+            id_end,
+            id_current,
+        }
+    }
+}
+
+impl<'a> Iterator for Unsatisfied<'a> {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if self.id_current == self.id_end {
+                return None;
+            }
+
+            let meta = self.guard.items.get(self.id_current)?;
+            self.id_current += 1;
+
+            if !meta.is_ready {
+                return Some(meta.description.clone());
+            }
+        }
     }
 }
 
@@ -80,55 +142,77 @@ impl Drop for InSequence {
 
 #[derive(Debug)]
 struct Inner {
-    next_id: usize,
+    items: Vec<Meta>,
     current_id: usize,
-    current_is_ready: bool,
+    sequence_id: usize,
+}
+
+#[derive(Default, Debug)]
+struct Meta {
+    is_ready: bool,
+    description: String,
 }
 
 impl Inner {
     fn create_handle(inner: Arc<Mutex<Self>>) -> SequenceHandle {
-        let id = inner.lock().next_id();
+        let (id, sequence_id) = {
+            let mut inner = inner.lock();
+            let id = inner.items.len();
+            inner.items.push(Meta::default());
 
-        SequenceHandle { id, inner }
-    }
+            (id, inner.sequence_id)
+        };
 
-    fn next_id(&mut self) -> usize {
-        let ret = self.next_id;
-
-        self.next_id += 1;
-
-        ret
+        SequenceHandle {
+            id,
+            inner,
+            sequence_id,
+        }
     }
 
     fn check(&mut self, id: usize) -> bool {
-        if self.current_id == id {
-            true
-        } else if self.current_id + 1 == id && self.current_is_ready {
-            self.current_id += 1;
-            self.current_is_ready = false;
-
-            true
-        } else {
-            false
+        loop {
+            if self.current_id == id {
+                return true;
+            } else if self.current_id < id && self.item(self.current_id).is_ready {
+                self.current_id += 1;
+            } else {
+                return false;
+            }
         }
     }
 
     fn set_ready(&mut self, id: usize) {
-        if self.current_id == id {
-            self.current_is_ready = true;
-        }
+        self.item_mut(id).is_ready = true;
+    }
+
+    fn set_description(&mut self, id: usize, value: String) {
+        self.item_mut(id).description = value;
+    }
+
+    fn item(&self, id: usize) -> &Meta {
+        self.items.get(id).expect("Invalid sequence handle")
+    }
+
+    fn item_mut(&mut self, id: usize) -> &mut Meta {
+        self.items.get_mut(id).expect("Invalid sequence handle")
     }
 }
 
 impl Default for Inner {
     fn default() -> Self {
         Self {
-            next_id: 1,
+            sequence_id: SEQUENCE_ID.fetch_add(1, Ordering::Relaxed),
+            items: vec![Meta {
+                is_ready: true,
+                description: "root".into(),
+            }],
             current_id: 0,
-            current_is_ready: true,
         }
     }
 }
+
+static SEQUENCE_ID: AtomicUsize = AtomicUsize::new(0);
 
 thread_local! {
     static CURRENT_SEQUENCE: UnsafeCell<Option<Arc<Mutex<Inner>>>> = UnsafeCell::new(None);
