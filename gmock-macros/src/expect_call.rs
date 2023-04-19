@@ -82,7 +82,7 @@ impl ToTokens for Call {
         let obj = obj.to_token_stream();
         let method = format_expect_call(method, as_trait.as_ref());
         let args = if args.is_empty() {
-            quote!(.with(gmock::matcher::unit()))
+            quote!(.with(gmock::matcher::no_args()))
         } else {
             let args = args.iter().map(|a| {
                 if a.to_token_stream().to_string() == "_" {
