@@ -31,8 +31,12 @@ pub struct SequenceHandle {
 }
 
 impl SequenceHandle {
-    pub fn check(&self) -> bool {
-        self.inner.lock().check(self.id)
+    pub fn is_active(&self) -> bool {
+        self.inner.lock().is_active(self.id)
+    }
+
+    pub fn is_done(&self) -> bool {
+        self.inner.lock().is_done(self.id)
     }
 
     pub fn sequence_id(&self) -> usize {
@@ -170,7 +174,7 @@ impl Inner {
         }
     }
 
-    fn check(&mut self, id: usize) -> bool {
+    fn is_active(&mut self, id: usize) -> bool {
         loop {
             if self.current_id == id {
                 return true;
@@ -180,6 +184,10 @@ impl Inner {
                 return false;
             }
         }
+    }
+
+    fn is_done(&mut self, id: usize) -> bool {
+        self.current_id > id
     }
 
     fn set_ready(&mut self, id: usize) {

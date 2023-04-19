@@ -498,26 +498,29 @@ impl Generator {
             let _ = writeln!(msg, "Tried the following expectations:");
 
             for ex in &mut locked.#field {
+                /* matches? */
                 let _ = writeln!(msg, "- {}", ex);
                 if !ex.matches(&args) {
                     let _ = writeln!(msg, "    does not match");
                     continue;
                 }
-
                 let _ = writeln!(msg, "    matched");
-                if ex.times.is_done() {
+
+                /* is done? */
+                let all_sequences_done = !ex.sequences.is_empty() && ex.sequences.iter().all(|s| s.is_done());
+                if ex.times.is_done() || all_sequences_done {
                     let _ = writeln!(msg, "    but is already done");
 
                     continue;
                 }
-
                 let _ = writeln!(msg, "    is not done yet");
 
+                /* is active? */
                 let mut is_active = true;
                 for seq_handle in &ex.sequences {
-                    if !seq_handle.check() {
+                    if !seq_handle.is_active() {
                         if take(&mut is_active) {
-                            let _ = writeln!(msg, "    but is not active");
+                            let _ = writeln!(msg, "    but is not active yet");
                         }
 
                         let _ = writeln!(msg, "      sequence #{} has unsatisfied expectations", seq_handle.sequence_id());
@@ -530,8 +533,8 @@ impl Generator {
                     continue;
                 }
 
+                /* execute */
                 ex.times.increment();
-
                 if ex.times.is_ready() {
                     for seq_handle in &ex.sequences {
                         seq_handle.set_ready();
