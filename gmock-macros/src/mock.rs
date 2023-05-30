@@ -122,7 +122,7 @@ impl ToTokens for MockableObject {
                 use std::sync::Arc;
                 use std::fmt::Write;
                 use std::marker::PhantomData;
-                use std::mem::{take, transmute};
+                use std::mem::take;
                 use std::pin::Pin;
 
                 use parking_lot::Mutex;
@@ -240,7 +240,11 @@ impl ToTokens for MockableObject {
                         #(
 
                             for ex in &self.#expectation_fields {
-                                if !ex.times.is_ready() {
+                                if ex.times.is_ready() {
+                                    for seq_handle in &ex.sequences {
+                                        seq_handle.set_done();
+                                    }
+                                } else {
                                     if !raise {
                                         println!();
                                         println!(#expectation_err);
@@ -248,10 +252,6 @@ impl ToTokens for MockableObject {
                                     }
 
                                     println!("- {}", &ex);
-                                } else {
-                                    for seq_handle in &ex.sequences {
-                                        seq_handle.set_done();
-                                    }
                                 }
                             }
 
@@ -413,10 +413,10 @@ impl Generator {
 
         let transmute_args = method.sig.inputs.without_self_arg().map(|i| {
             let pat = &i.pat;
-            let ty = &i.ty; // TODO .replace_default_lifetime(&mut );
+            let ty = &i.ty;
 
             quote! {
-                let #pat: #ty = unsafe { transmute(#pat) };
+                let #pat: #ty = #pat;
             }
         });
 
