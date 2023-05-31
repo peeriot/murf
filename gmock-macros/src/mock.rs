@@ -10,11 +10,11 @@ use syn::{
     parse::{discouraged::Speculative, Parse, ParseStream, Parser, Result as ParseResult},
     parse2,
     punctuated::Punctuated,
-    token::{Comma, Gt, Lt},
+    token::{Colon, Comma, Gt, Lt, Where},
     Attribute, FnArg, GenericArgument, GenericParam, Generics, ImplItem, ImplItemMethod,
     ImplItemType, Item, ItemEnum, ItemImpl, ItemStruct, Lifetime, LifetimeDef, Meta, NestedMeta,
-    PatType, Path, PathArguments, PathSegment, ReturnType, Stmt, Token, Type, TypePath,
-    WherePredicate,
+    PatType, Path, PathArguments, PathSegment, PredicateLifetime, PredicateType, ReturnType, Stmt,
+    Token, Type, TypeParamBound, TypePath, WhereClause, WherePredicate,
 };
 
 use crate::misc::{format_expect_call, format_expect_module, format_expectations_field};
@@ -65,6 +65,18 @@ impl ToTokens for MockableObject {
         let expectation_err = format!("Mocked object '{ident}' has unfulfilled expectations");
         let module = format_ident!("mock_impl_{}", ident.to_string().to_case(Case::Snake));
 
+        let trait_send = if self.generated.impl_send {
+            Some(quote!(+ Send))
+        } else {
+            None
+        };
+
+        let trait_sync = if self.generated.impl_sync {
+            Some(quote!(+ Sync))
+        } else {
+            None
+        };
+
         let mock = &self.generated.mock;
         let handle = &self.generated.handle;
         let expectation_modules = &self.generated.expectation_modules;
@@ -84,7 +96,7 @@ impl ToTokens for MockableObject {
             let field = format_expectations_field(ident);
 
             quote! {
-                #field: Vec<#ident::Expectation #ga_mock_types>
+                #field: Vec<Box<dyn gmock::Expectation #trait_send #trait_sync + 'mock>>
             }
         });
         let expectation_field_ctor = self.generated.expectations.iter().map(|ident| {
@@ -124,6 +136,7 @@ impl ToTokens for MockableObject {
                 use std::marker::PhantomData;
                 use std::mem::take;
                 use std::pin::Pin;
+                use std::any::{Any, type_name};
 
                 use parking_lot::Mutex;
 
@@ -240,10 +253,8 @@ impl ToTokens for MockableObject {
                         #(
 
                             for ex in &self.#expectation_fields {
-                                if ex.times.is_ready() {
-                                    for seq_handle in &ex.sequences {
-                                        seq_handle.set_done();
-                                    }
+                                if ex.is_ready() {
+                                    ex.set_done();
                                 } else {
                                     if !raise {
                                         println!();
@@ -324,6 +335,9 @@ impl Generator {
     fn generate(mut parsed: Parsed) -> MockableObject {
         let mut generator = Self::default();
 
+        generator.result.impl_send = parsed.object.derives("Send");
+        generator.result.impl_sync = parsed.object.derives("Sync");
+
         for i in &parsed.impls {
             generator.generate_impl(&parsed, i);
         }
@@ -370,7 +384,10 @@ impl Generator {
     }
 
     fn generate_handle_impl(&mut self, object: &ObjectToMock) {
-        let ga = object.generics().add_lifetime("'mock");
+        let ga = object
+            .generics()
+            .add_lifetime("'mock")
+            .add_lifetime_clauses("'mock");
         let (ga_impl, ga_types, ga_where) = ga.split_for_impl();
 
         let items = take(&mut self.handle_items);
@@ -409,7 +426,17 @@ impl Generator {
         let args = method.sig.inputs.without_self_arg().map(|i| &i.pat);
         let args = quote! { ( #( #args ),* ) };
 
+        let arg_types = method.sig.inputs.without_self_arg().map(|i| &i.ty);
+        let arg_types = quote! { ( #( #arg_types ),* ) };
+
         let self_ty = &impl_.self_ty;
+
+        let (impl_, lts) = impl_.split_off_temp_lifetimes();
+        let ga_mock = impl_
+            .generics
+            .add_lifetime("'mock")
+            .remove_lifetimes(&lts.lifetimes);
+        let (_ga_mock_impl, ga_mock_types, _ga_mock_where) = ga_mock.split_for_impl();
 
         let transmute_args = method.sig.inputs.without_self_arg().map(|i| {
             let pat = &i.pat;
@@ -502,13 +529,24 @@ impl Generator {
             let _ = writeln!(msg, "Tried the following expectations:");
 
             for ex in &mut locked.#field {
-                /* matches? */
                 let _ = writeln!(msg, "- {}", ex);
-                if !ex.matches(&args) {
-                    let _ = writeln!(msg, "    does not match");
+
+                /* type matches? */
+                if ex.args_type_id() != type_name::<#arg_types>() {
+                    let _ = writeln!(msg, "    type mismatched");
                     continue;
                 }
-                let _ = writeln!(msg, "    matched");
+                let _ = writeln!(msg, "    type matched");
+
+                let ex: &mut dyn gmock::Expectation = &mut **ex;
+                let ex = unsafe { &mut *(ex as *mut dyn gmock::Expectation as *mut #module::Expectation #ga_mock_types) };
+
+                /* value matches? */
+                if !ex.matches(&args) {
+                    let _ = writeln!(msg, "    but value mismatched");
+                    continue;
+                }
+                let _ = writeln!(msg, "    value matched");
 
                 /* is done? */
                 let all_sequences_done = !ex.sequences.is_empty() && ex.sequences.iter().all(|s| s.is_done());
@@ -580,21 +618,35 @@ impl Generator {
         let module = format_expect_module(&method.sig.ident, trait_);
         let field = format_expectations_field(&module);
 
-        let ga = parsed
-            .object
-            .generics()
+        let (impl_, lts) = impl_.split_off_temp_lifetimes();
+
+        let ga = impl_
+            .generics
             .add_lifetime("'mock")
-            .add_lifetime("'_");
+            .remove_lifetimes(&lts.lifetimes);
         let (_, ga_types, _) = ga.split_for_impl();
 
+        let ga_extra = impl_
+            .generics
+            .remove_other(parsed.object.generics())
+            .add_lifetime_clauses("'mock");
+        let (ga_extra_impl, _, ga_extra_where) = ga_extra.split_for_impl();
+
+        let ga_builder = ga.add_lifetime("'_");
+        let (_, ga_builder_types, _) = ga_builder.split_for_impl();
+
         self.handle_items.extend(quote! {
-            pub fn #ident(&self) -> #module::ExpectationBuilder #ga_types {
+            pub fn #ident #ga_extra_impl(&self) -> #module::ExpectationBuilder #ga_builder_types
+            #ga_extra_where
+            {
                 #module::ExpectationBuilder::new(parking_lot::MutexGuard::map(self.shared.lock(), |shared| {
-                    let exp = #module::Expectation::default();
+                    let exp = #module::Expectation::#ga_types::default();
 
-                    shared.#field.push(exp);
+                    shared.#field.push(Box::new(exp));
 
-                    shared.#field.last_mut().unwrap()
+                    let exp: &mut dyn gmock::Expectation = &mut **shared.#field.last_mut().unwrap();
+
+                    unsafe { &mut *(exp as *mut dyn gmock::Expectation as *mut #module::Expectation #ga_types) }
                 }))
             }
         })
@@ -619,7 +671,9 @@ impl Generator {
         let (ga_mock_impl, ga_mock_types, ga_mock_where) = ga_mock.split_for_impl();
         let ga_mock_phantom = ga_mock.make_phantom_data();
 
-        let ga_builder = ga_mock.add_lifetime("'mock_exp");
+        let ga_builder = ga_mock
+            .add_lifetime("'mock_exp")
+            .remove_lifetimes(&lts.lifetimes);
         let (ga_builder_impl, ga_builder_types, ga_builder_where) = ga_builder.split_for_impl();
 
         let type_ = Type::from_ident(parsed.object.ident().clone());
@@ -642,6 +696,13 @@ impl Generator {
             t => t.clone().replace_default_lifetime_owned(&mut lts_mock),
         });
         let args_with_lt = quote! { ( #( #args_with_lt ),* ) };
+
+        let args_without_lt = method
+            .sig
+            .inputs
+            .without_self_arg()
+            .map(|i| i.ty.clone().remove_lifetimes_owned());
+        let args_without_lt = quote! { ( #( #args_without_lt ),* ) };
 
         let lts = lts.lifetimes;
         let lts = if lts.is_empty() {
@@ -681,13 +742,13 @@ impl Generator {
             None
         };
 
-        let trait_send = if parsed.object.derives("Send") {
+        let trait_send = if self.result.impl_send {
             Some(quote!(+ Send))
         } else {
             None
         };
 
-        let trait_sync = if parsed.object.derives("Sync") {
+        let trait_sync = if self.result.impl_sync {
             Some(quote!(+ Sync))
         } else {
             None
@@ -742,6 +803,22 @@ impl Generator {
                         } else {
                             true
                         }
+                    }
+                }
+
+                impl #ga_mock_impl gmock::Expectation for Expectation #ga_mock_types #ga_mock_where {
+                    fn is_ready(&self) -> bool {
+                        self.times.is_ready()
+                    }
+
+                    fn set_done(&self) {
+                        for seq_handle in &self.sequences {
+                            seq_handle.set_done();
+                        }
+                    }
+
+                    fn args_type_id(&self) -> &'static str {
+                        type_name::<#args_without_lt>()
                     }
                 }
 
@@ -932,6 +1009,8 @@ struct Generated {
     handle: TokenStream,
     expectations: Vec<Ident>,
     expectation_modules: TokenStream,
+    impl_send: bool,
+    impl_sync: bool,
 }
 
 /* ObjectToMock */
@@ -1111,6 +1190,9 @@ impl ItemImplEx for ItemImpl {
 trait GenericsEx {
     fn add_lifetime(&self, lt: &str) -> Self;
     fn make_phantom_data(&self) -> TokenStream;
+    fn add_lifetime_clauses(&self, lt: &str) -> Self;
+    fn remove_other(&self, other: &Generics) -> Self;
+    fn remove_lifetimes(&self, lts: &Punctuated<Lifetime, Comma>) -> Self;
 }
 
 impl GenericsEx for Generics {
@@ -1160,6 +1242,111 @@ impl GenericsEx for Generics {
 
         quote!(PhantomData<(#( #params ),*)>)
     }
+
+    fn add_lifetime_clauses(&self, lt: &str) -> Self {
+        let mut ret = self.clone();
+
+        let predicates = ret
+            .params
+            .iter()
+            .filter_map(|param| match param {
+                GenericParam::Type(t) => {
+                    let lt = Lifetime::new(lt, Span::call_site());
+
+                    let mut bounds = Punctuated::new();
+                    bounds.push(TypeParamBound::Lifetime(lt));
+
+                    Some(WherePredicate::Type(PredicateType {
+                        lifetimes: None,
+                        bounded_ty: Type::Verbatim(t.ident.to_token_stream()),
+                        colon_token: Colon::default(),
+                        bounds,
+                    }))
+                }
+                GenericParam::Lifetime(t) => {
+                    let lt = Lifetime::new(lt, Span::call_site());
+
+                    let mut bounds = Punctuated::new();
+                    bounds.push(lt);
+
+                    Some(WherePredicate::Lifetime(PredicateLifetime {
+                        lifetime: t.lifetime.clone(),
+                        colon_token: Colon::default(),
+                        bounds,
+                    }))
+                }
+                GenericParam::Const(_) => None,
+            })
+            .collect::<Vec<_>>();
+
+        if ret.where_clause.is_none() {
+            ret.where_clause = Some(WhereClause {
+                where_token: Where::default(),
+                predicates: Punctuated::new(),
+            })
+        }
+
+        ret.where_clause
+            .as_mut()
+            .unwrap()
+            .predicates
+            .extend(predicates);
+
+        ret
+    }
+
+    fn remove_other(&self, other: &Generics) -> Self {
+        let mut ret = self.clone();
+
+        ret.params = ret
+            .params
+            .into_iter()
+            .filter(|param| {
+                for p in &other.params {
+                    match (param, p) {
+                        (GenericParam::Type(a), GenericParam::Type(b)) if a.ident == b.ident => {
+                            return false
+                        }
+                        (GenericParam::Const(a), GenericParam::Const(b)) if a.ident == b.ident => {
+                            return false
+                        }
+                        (GenericParam::Lifetime(a), GenericParam::Lifetime(b))
+                            if a.lifetime == b.lifetime =>
+                        {
+                            return false
+                        }
+                        (_, _) => (),
+                    }
+                }
+
+                true
+            })
+            .collect();
+
+        ret
+    }
+
+    fn remove_lifetimes(&self, lts: &Punctuated<Lifetime, Comma>) -> Self {
+        let mut ret = self.clone();
+
+        ret.params = ret
+            .params
+            .into_iter()
+            .filter(|param| {
+                if let GenericParam::Lifetime(p) = param {
+                    for lt in lts {
+                        if p.lifetime.ident == lt.ident {
+                            return false;
+                        }
+                    }
+                }
+
+                true
+            })
+            .collect();
+
+        ret
+    }
 }
 
 /* InputsEx */
@@ -1190,8 +1377,15 @@ trait TypeEx: Clone {
     fn from_ident(ident: Ident) -> Self;
     fn contains_lifetime(&self, lt: &Lifetime) -> bool;
     fn contains_self_type(&self) -> bool;
+    fn remove_lifetimes(&mut self);
     fn replace_self_type(&mut self, type_: &Type);
     fn replace_default_lifetime(&mut self, lts: &mut TempLifetimes);
+
+    fn remove_lifetimes_owned(mut self) -> Self {
+        self.remove_lifetimes();
+
+        self
+    }
 
     fn replace_self_type_owned(mut self, type_: &Type) -> Self {
         self.replace_self_type(type_);
@@ -1358,6 +1552,39 @@ impl TypeEx for Type {
         visitor.visit(as_unsafe_cell(self));
 
         visitor.result
+    }
+
+    fn remove_lifetimes(&mut self) {
+        struct Visitor;
+
+        impl TypeVisitor for Visitor {
+            fn visit_type(&mut self, ty: &UnsafeCell<Type>) -> bool {
+                let ty = unsafe { &mut *ty.get() };
+
+                match ty {
+                    Type::Path(ty) => {
+                        for seg in &mut ty.path.segments {
+                            match &mut seg.arguments {
+                                PathArguments::None | PathArguments::Parenthesized(_) => (),
+                                PathArguments::AngleBracketed(x) => {
+                                    for arg in &mut x.args {
+                                        if let GenericArgument::Lifetime(lt) = arg {
+                                            lt.ident = Ident::new("static", Span::call_site());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Type::Reference(ty) => ty.lifetime = None,
+                    _ => (),
+                }
+
+                true
+            }
+        }
+
+        Visitor.visit(as_unsafe_cell(self));
     }
 
     fn replace_self_type(&mut self, type_: &Type) {

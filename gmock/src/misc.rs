@@ -2,6 +2,7 @@
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
+use std::fmt::Display;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -52,4 +53,12 @@ where
     fn get(&self) -> T {
         unsafe { &*self.0 }.clone()
     }
+}
+
+/* Expectation */
+
+pub trait Expectation: Display {
+    fn is_ready(&self) -> bool;
+    fn set_done(&self);
+    fn args_type_id(&self) -> &'static str;
 }
