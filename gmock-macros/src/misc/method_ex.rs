@@ -1,12 +1,21 @@
-use quote::quote;
-use syn::{ImplItemMethod, Item, ReturnType, Stmt};
+use quote::{quote, ToTokens};
+use syn::{FnArg, ImplItemMethod, Item, ReturnType, Stmt};
 
 pub trait MethodEx {
+    fn is_associated_fn(&self) -> bool;
     fn has_default_impl(&self) -> bool;
     fn need_default_impl(&self) -> bool;
 }
 
 impl MethodEx for ImplItemMethod {
+    fn is_associated_fn(&self) -> bool {
+        self.sig.inputs.iter().all(|i| match i {
+            FnArg::Receiver(_) => false,
+            FnArg::Typed(t) if t.pat.to_token_stream().to_string() == "self" => false,
+            FnArg::Typed(_) => true,
+        })
+    }
+
     fn has_default_impl(&self) -> bool {
         let stmts = &self.block.stmts;
 

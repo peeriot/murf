@@ -10,6 +10,7 @@ pub struct MockMethod(ImplItemMethod);
 impl MockMethod {
     pub fn render(context: &MethodContext, mut method: ImplItemMethod) -> ImplItemMethod {
         let MethodContextData {
+            is_associated,
             impl_,
             trait_,
             ga_expectation,
@@ -18,6 +19,33 @@ impl MockMethod {
             args,
             ..
         } = &**context;
+
+        let locked = if *is_associated {
+            quote! {
+                let mut locked = #ident_expectation_module::EXPECTATIONS.lock();
+            }
+        } else {
+            quote! {
+                let mut locked = self.shared.lock();
+            }
+        };
+
+        let expectations_iter = if *is_associated {
+            quote!(&mut *locked)
+        } else {
+            quote!(&mut locked.#ident_expectation_field)
+        };
+
+        let expectation_unwrap = is_associated.then(|| {
+            quote! {
+                let ex = if let Some(ex) = ex.upgrade() {
+                    ex
+                } else {
+                    continue;
+                };
+                let mut ex = ex.lock();
+            }
+        });
 
         let self_ty = &impl_.self_ty;
         let (_ga_expectation_impl, ga_expectation_types, _ga_expectation_where) =
@@ -103,14 +131,16 @@ impl MockMethod {
         );
 
         method.block.stmts = vec![Stmt::Item(Item::Verbatim(quote! {
-            let mut locked = self.shared.lock();
+            #locked
             let args = #args_name;
 
             let mut msg = String::new();
             let _ = writeln!(msg, #error);
             let _ = writeln!(msg, "Tried the following expectations:");
 
-            for ex in &mut locked.#ident_expectation_field {
+            for ex in #expectations_iter {
+                #expectation_unwrap
+
                 let _ = writeln!(msg, "- {}", ex);
 
                 /* type matches? */

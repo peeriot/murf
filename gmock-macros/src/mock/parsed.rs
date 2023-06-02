@@ -22,20 +22,19 @@ impl Parsed {
         for i in &mut impl_.items {
             if let ImplItem::Method(m) = i {
                 if !m.has_default_impl() {
-                    let block = if m.need_default_impl() {
-                        quote!({
+                    if m.need_default_impl() {
+                        m.block.stmts = vec![Stmt::Item(Item::Verbatim(quote!(
                             panic!("No default action specified!");
-                        })
+                        )))];
                     } else {
-                        quote!({})
-                    };
+                        m.block.stmts.clear();
+                    }
 
                     let attr =
                         Parser::parse2(Attribute::parse_outer, quote!(#[allow(unused_variables)]))
                             .unwrap();
 
                     m.attrs.extend(attr);
-                    m.block.stmts = vec![Stmt::Item(Item::Verbatim(block))];
                 }
             }
         }

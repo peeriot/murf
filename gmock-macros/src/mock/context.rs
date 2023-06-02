@@ -8,7 +8,7 @@ use syn::{Generics, ImplItemMethod, ItemImpl, PatType, Path, ReturnType, Type};
 
 use crate::misc::{
     format_expect_call, format_expect_module, format_expectations_field, GenericsEx, InputsEx,
-    ItemImplEx, ReturnTypeEx, TempLifetimes, TypeEx,
+    ItemImplEx, MethodEx, ReturnTypeEx, TempLifetimes, TypeEx,
 };
 
 use super::parsed::Parsed;
@@ -145,20 +145,23 @@ impl MethodContext {
         impl_: &ItemImpl,
         method: &ImplItemMethod,
     ) -> Self {
+        let is_associated = method.is_associated_fn();
+
         let (impl_, lts_temp) = impl_.clone().split_off_temp_lifetimes();
         let trait_ = impl_.trait_.as_ref().map(|(_, x, _)| x).cloned();
 
         let ga_impl_mock = context.ga_impl.clone().add_lifetime("'mock");
 
-        let ga_expectation = ga_impl_mock.clone().remove_lifetimes(&lts_temp);
+        let mut ga_expectation = context.ga_impl.clone();
+        if !is_associated {
+            ga_expectation = ga_expectation.add_lifetime("'mock");
+        };
+        let ga_expectation = ga_expectation.remove_lifetimes(&lts_temp);
         let ga_expectation_builder = ga_impl_mock
+            .add_lifetime_clauses("'mock")
             .add_lifetime("'mock_exp")
             .remove_lifetimes(&lts_temp);
-        let ga_method = context
-            .ga_impl
-            .clone()
-            .remove_other(&context.ga_state)
-            .add_lifetime_clauses("'mock");
+        let ga_method = context.ga_impl.clone().remove_other(&context.ga_state);
 
         let args = method
             .sig
@@ -205,6 +208,8 @@ impl MethodContext {
         Self(Arc::new(MethodContextData {
             context,
 
+            is_associated,
+
             impl_,
             trait_,
 
@@ -241,6 +246,8 @@ impl Deref for MethodContext {
 
 pub struct MethodContextData {
     pub context: ImplContext,
+
+    pub is_associated: bool,
 
     pub trait_: Option<Path>,
     pub impl_: ItemImpl,

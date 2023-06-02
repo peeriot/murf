@@ -96,7 +96,7 @@ impl MockModule {
         let ret = MockMethod::render(&context, method.clone());
 
         self.handle.add_method(context.clone());
-        self.shared.add_expectation(&context);
+        self.shared.add_expectation(context.clone());
         self.expectations
             .push(ExpectationModule::new(context, parsed, impl_, method));
 
@@ -129,13 +129,14 @@ impl ToTokens for MockModule {
             pub use #ident_module::{Mockable as _, MockableDefault as _};
 
             mod #ident_module {
-                use std::sync::Arc;
+                use std::any::type_name;
                 use std::fmt::Write;
                 use std::marker::PhantomData;
                 use std::mem::take;
-                use std::any::type_name;
+                use std::sync::{Arc, Weak};
 
                 use parking_lot::Mutex;
+                use gmock::{Lazy, Expectation};
 
                 use super::*;
 

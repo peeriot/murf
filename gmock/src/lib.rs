@@ -5,6 +5,7 @@ pub mod sequence;
 pub mod times;
 
 pub use gmock_macros::{expect_call, mock};
+pub use once_cell::sync::Lazy;
 
 pub use action::Action;
 pub use matcher::Matcher;

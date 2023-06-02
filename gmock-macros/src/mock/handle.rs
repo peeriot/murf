@@ -29,34 +29,28 @@ impl Handle {
 
     fn render_method(&self, context: &MethodContextData) -> TokenStream {
         let MethodContextData {
+            is_associated,
             ident_expect_method,
-            ident_expectation_field,
             ident_expectation_module,
             ga_method,
             ga_expectation,
             ..
         } = context;
 
-        let ga_builder = ga_expectation.clone().add_lifetime("'_");
+        let mut ga_builder = ga_expectation.clone();
+        if *is_associated {
+            ga_builder = ga_builder.add_lifetime("'mock");
+        }
+        ga_builder = ga_builder.add_lifetime("'_");
 
         let (ga_method_impl, _ga_method_types, ga_method_where) = ga_method.split_for_impl();
         let (_ga_builder_impl, ga_builder_types, _ga_builder_where) = ga_builder.split_for_impl();
-        let (_ga_expectation_impl, ga_expectation_types, _ga_expectation_where) =
-            ga_expectation.split_for_impl();
 
         quote! {
             pub fn #ident_expect_method #ga_method_impl(&self) -> #ident_expectation_module::ExpectationBuilder #ga_builder_types
             #ga_method_where
             {
-                #ident_expectation_module::ExpectationBuilder::new(parking_lot::MutexGuard::map(self.shared.lock(), |shared| {
-                    let exp = #ident_expectation_module::Expectation::#ga_expectation_types::default();
-
-                    shared.#ident_expectation_field.push(Box::new(exp));
-
-                    let exp: &mut dyn gmock::Expectation = &mut **shared.#ident_expectation_field.last_mut().unwrap();
-
-                    unsafe { &mut *(exp as *mut dyn gmock::Expectation as *mut #ident_expectation_module::Expectation #ga_expectation_types) }
-                }))
+                #ident_expectation_module::ExpectationBuilder::new(&self)
             }
         }
     }

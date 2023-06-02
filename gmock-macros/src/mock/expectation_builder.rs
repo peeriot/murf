@@ -31,6 +31,8 @@ impl ToTokens for ExpectationBuilder {
 
         let MethodContextData {
             context,
+            is_associated,
+            ident_expectation_field,
             ga_expectation,
             ga_expectation_builder,
             lts_mock: TempLifetimes(lts_mock),
@@ -42,11 +44,38 @@ impl ToTokens for ExpectationBuilder {
         let ContextData {
             trait_send,
             trait_sync,
+            ga_handle,
             ..
         } = &****context;
 
-        let lts_mock = lts_mock.is_empty().not().then(|| quote!(for < #lts_mock >));
+        let trait_send = is_associated
+            .then(|| quote!( + Send))
+            .or_else(|| trait_send.clone());
+        let trait_sync = is_associated
+            .then(|| quote!( + Sync))
+            .or_else(|| trait_sync.clone());
 
+        let lts_mock = lts_mock.is_empty().not().then(|| quote!(for < #lts_mock >));
+        let lt = if *is_associated {
+            quote!( + 'static)
+        } else {
+            quote!( + 'mock)
+        };
+
+        let drop_handler = if *is_associated {
+            quote! {
+                let expectation: Box<dyn gmock::Expectation + Send + Sync + 'static> = Box::new(expectation);
+                let expectation = Arc::new(Mutex::new(expectation));
+
+                EXPECTATIONS.lock().push(Arc::downgrade(&expectation));
+            }
+        } else {
+            quote! {
+                let expectation = Box::new(expectation);
+            }
+        };
+
+        let (_ga_handle_impl, ga_handle_types, _ga_handle_where) = ga_handle.split_for_impl();
         let (_ga_expectation_impl, ga_expectation_types, _ga_expectation_where) =
             ga_expectation.split_for_impl();
         let (
@@ -58,74 +87,84 @@ impl ToTokens for ExpectationBuilder {
         tokens.extend(quote! {
             #must_use
             pub struct ExpectationBuilder #ga_expectation_builder_impl #ga_expectation_builder_where {
-                guard: MappedMutexGuard<'mock_exp, Expectation #ga_expectation_types>,
+                handle: &'mock_exp Handle #ga_handle_types,
+                expectation: Option<Expectation #ga_expectation_types>,
             }
 
             impl #ga_expectation_builder_impl ExpectationBuilder #ga_expectation_builder_types #ga_expectation_builder_where {
-                pub fn new(mut guard: MappedMutexGuard<'mock_exp, Expectation #ga_expectation_types>) -> Self {
-                    guard.sequences = InSequence::create_handle().into_iter().collect();
-                    guard.times.range = (1..).into();
+                pub fn new(handle: &'mock_exp Handle #ga_handle_types,) -> Self {
+                    let mut expectation = Expectation::default();
+                    expectation.sequences = InSequence::create_handle().into_iter().collect();
+                    expectation.times.range = (1..).into();
 
                     Self {
-                        guard,
+                        handle,
+                        expectation: Some(expectation),
                     }
                 }
 
                 pub fn description<S: Into<String>>(mut self, value: S) -> Self {
-                    self.guard.description = Some(value.into());
+                    self.expectation.as_mut().unwrap().description = Some(value.into());
 
                     self
                 }
 
-                pub fn with<M: #lts_mock Matcher<( #( #args_with_lt ),* )> #trait_send #trait_sync + 'mock>(mut self, matcher: M) -> Self {
-                    self.guard.matcher = Some(Box::new(matcher));
+                pub fn with<M: #lts_mock Matcher<( #( #args_with_lt ),* )> #trait_send #trait_sync #lt>(mut self, matcher: M) -> Self {
+                    self.expectation.as_mut().unwrap().matcher = Some(Box::new(matcher));
 
                     self
                 }
 
                 pub fn in_sequence(mut self, sequence: &Sequence) -> Self {
-                    self.guard.sequences = vec![ sequence.create_handle() ];
+                    self.expectation.as_mut().unwrap().sequences = vec![ sequence.create_handle() ];
 
                     self
                 }
 
                 pub fn add_sequence(mut self, sequence: &Sequence) -> Self {
-                    self.guard.sequences.push(sequence.create_handle());
+                    self.expectation.as_mut().unwrap().sequences.push(sequence.create_handle());
 
                     self
                 }
 
                 pub fn no_sequences(mut self) -> Self {
-                    self.guard.sequences.clear();
+                    self.expectation.as_mut().unwrap().sequences.clear();
 
                     self
                 }
 
                 pub fn times<R: Into<TimesRange>>(mut self, range: R) -> Self {
-                    self.guard.times.range = range.into();
+                    self.expectation.as_mut().unwrap().times.range = range.into();
 
                     self
                 }
 
                 pub fn will_once<A>(self, action: A)
                 where
-                    A: #lts_mock Action<( #( #args_with_lt ),* ), #return_type> #trait_send #trait_sync + 'mock,
+                    A: #lts_mock Action<( #( #args_with_lt ),* ), #return_type> #trait_send #trait_sync #lt,
                 {
-                    self.times(1).guard.action = Some(Box::new(OnetimeAction::new(action)));
+                    self.times(1).expectation.as_mut().unwrap().action = Some(Box::new(OnetimeAction::new(action)));
                 }
 
                 pub fn will_repeatedly<A>(mut self, action: A)
                 where
-                    A: #lts_mock Action<( #( #args_with_lt ),* ), #return_type> #trait_send #trait_sync + Clone + 'mock,
+                    A: #lts_mock Action<( #( #args_with_lt ),* ), #return_type> #trait_send #trait_sync + Clone #lt,
                 {
-                    self.guard.action = Some(Box::new(RepeatedAction::new(action)));
+                    self.expectation.as_mut().unwrap().action = Some(Box::new(RepeatedAction::new(action)));
                 }
             }
 
             impl #ga_expectation_builder_impl Drop for ExpectationBuilder #ga_expectation_builder_types #ga_expectation_builder_where {
                 fn drop(&mut self) {
-                    for seq_handle in &self.guard.sequences {
-                        seq_handle.set_description(self.guard.to_string());
+                    if let Some(expectation) = self.expectation.take() {
+                        let desc = expectation.to_string();
+                        for seq_handle in &expectation.sequences {
+                            seq_handle.set_description(desc.clone());
+                        }
+
+                        #drop_handler;
+
+                        self.handle.shared.lock().#ident_expectation_field.push(expectation);
                     }
                 }
             }

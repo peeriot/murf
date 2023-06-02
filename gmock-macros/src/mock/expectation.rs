@@ -62,6 +62,7 @@ impl ToTokens for Expectation {
 
         let MethodContextData {
             context,
+            is_associated,
             ga_expectation,
             lts_temp: TempLifetimes(lts_temp),
             lts_mock: TempLifetimes(lts_mock),
@@ -81,8 +82,20 @@ impl ToTokens for Expectation {
             ..
         } = &**context;
 
+        let trait_send = is_associated
+            .then(|| quote!( + Send))
+            .or_else(|| trait_send.clone());
+        let trait_sync = is_associated
+            .then(|| quote!( + Sync))
+            .or_else(|| trait_sync.clone());
+
         let lts_temp = lts_temp.is_empty().not().then(|| quote!(< #lts_temp >));
         let lts_mock = lts_mock.is_empty().not().then(|| quote!(for < #lts_mock >));
+        let lt = if *is_associated {
+            quote!(+ 'static)
+        } else {
+            quote!(+ 'mock)
+        };
 
         let ga_expectation_phantom = ga_expectation.make_phantom_data();
         let (ga_expectation_impl, ga_expectation_types, ga_expectation_where) =
@@ -92,8 +105,8 @@ impl ToTokens for Expectation {
             pub struct Expectation #ga_expectation_types #ga_expectation_where {
                 pub times: Times,
                 pub description: Option<String>,
-                pub action: Option<Box<dyn #lts_mock RepeatableAction<( #( #args_with_lt ),* ), #return_type> #trait_send #trait_sync + 'mock>>,
-                pub matcher: Option<Box<dyn #lts_mock Matcher<( #( #args_with_lt ),* )> #trait_send #trait_sync + 'mock>>,
+                pub action: Option<Box<dyn #lts_mock RepeatableAction<( #( #args_with_lt ),* ), #return_type> #trait_send #trait_sync #lt>>,
+                pub matcher: Option<Box<dyn #lts_mock Matcher<( #( #args_with_lt ),* )> #trait_send #trait_sync #lt>>,
                 pub sequences: Vec<SequenceHandle>,
                 _marker: #ga_expectation_phantom,
             }

@@ -42,9 +42,22 @@ impl ToTokens for ExpectationModule {
         } = self;
 
         let MethodContextData {
+            is_associated,
             ident_expectation_module,
             ..
         } = &**context;
+
+        let associated_expectations = if *is_associated {
+            Some(quote! {
+                pub static EXPECTATIONS: Lazy<Mutex<Vec<Weak<Mutex<Box<dyn gmock::Expectation + Send + Sync + 'static>>>>>> = Lazy::new(|| Default::default());
+
+                pub fn cleanup_associated_expectations() {
+                    EXPECTATIONS.lock().retain_mut(|ex| ex.strong_count() > 0);
+                }
+            })
+        } else {
+            None
+        };
 
         tokens.extend(quote! {
             mod #ident_expectation_module {
@@ -61,6 +74,8 @@ impl ToTokens for ExpectationModule {
 
                 #expectation
                 #expectation_builder
+
+                #associated_expectations
             }
         });
     }
