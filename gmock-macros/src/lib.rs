@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "debug-to-file", feature(proc_macro_span))]
+
 use proc_macro::TokenStream;
 
 mod expect_call;

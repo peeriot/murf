@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 gmock-macros = "0.1"
+once_cell = { version = "1.18", features = [ "parking_lot" ] }
 parking_lot = "0.12"
 
 [dev-dependencies]

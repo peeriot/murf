@@ -13,7 +13,7 @@ mock! {
 
         fn poll_next(
             self: Pin<&mut Self>,
-            cx: &mut Context<'_>
+            _cx: &mut Context<'_>
         ) -> Poll<Option<T>>;
     }
 }

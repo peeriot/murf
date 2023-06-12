@@ -5,9 +5,10 @@ pub mod sequence;
 pub mod times;
 
 pub use gmock_macros::{expect_call, mock};
+pub use once_cell::sync::Lazy;
 
 pub use action::Action;
 pub use matcher::Matcher;
-pub use misc::{Pointee, Pointer};
+pub use misc::{Expectation, Pointee, Pointer};
 pub use sequence::{InSequence, Sequence, SequenceHandle};
 pub use times::{Times, TimesRange};
