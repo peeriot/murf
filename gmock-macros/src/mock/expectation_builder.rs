@@ -2,7 +2,7 @@ use std::ops::Not;
 
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use syn::ImplItemMethod;
+use syn::ImplItemFn;
 
 use crate::misc::{MethodEx, TempLifetimes};
 
@@ -18,7 +18,7 @@ pub struct ExpectationBuilder {
 }
 
 impl ExpectationBuilder {
-    pub fn new(context: MethodContext, parsed: &Parsed, method: &ImplItemMethod) -> Self {
+    pub fn new(context: MethodContext, parsed: &Parsed, method: &ImplItemFn) -> Self {
         let must_use = (method.need_default_impl() && !method.has_default_impl() && !parsed.ty.is_extern()).then(|| quote!(#[must_use = "You need to define an action for this expectation because it has no default action!"]));
 
         ExpectationBuilder { context, must_use }

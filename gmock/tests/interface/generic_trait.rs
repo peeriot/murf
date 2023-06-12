@@ -20,7 +20,7 @@ mock! {
     pub struct MyStruct;
 
     impl<T> Fuu<T> for MyStruct {
-        fn fuu(&self, arg: T);
+        fn fuu(&self, _arg: T);
     }
 }
 

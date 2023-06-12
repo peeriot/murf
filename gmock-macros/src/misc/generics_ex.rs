@@ -3,7 +3,7 @@ use quote::quote;
 use syn::{
     punctuated::Punctuated,
     token::{Colon, Comma, Gt, Lt},
-    GenericParam, Generics, Lifetime, LifetimeDef, TypeParamBound,
+    GenericParam, Generics, Lifetime, LifetimeParam, TypeParamBound,
 };
 
 pub trait GenericsEx {
@@ -30,7 +30,7 @@ impl GenericsEx for Generics {
 
         self.params.insert(
             0,
-            GenericParam::Lifetime(LifetimeDef::new(Lifetime::new(lt, Span::call_site()))),
+            GenericParam::Lifetime(LifetimeParam::new(Lifetime::new(lt, Span::call_site()))),
         );
 
         if self.gt_token.is_none() {

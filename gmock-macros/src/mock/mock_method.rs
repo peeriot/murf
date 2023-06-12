@@ -1,14 +1,14 @@
 use quote::{quote, ToTokens};
-use syn::{FnArg, ImplItemMethod, Item, ReturnType, Stmt, Type};
+use syn::{FnArg, ImplItemFn, Item, ReturnType, Stmt, Type};
 
 use crate::misc::{FormattedString, TypeEx};
 
 use super::context::{MethodContext, MethodContextData};
 
-pub struct MockMethod(ImplItemMethod);
+pub struct MockMethod(ImplItemFn);
 
 impl MockMethod {
-    pub fn render(context: &MethodContext, mut method: ImplItemMethod) -> ImplItemMethod {
+    pub fn render(context: &MethodContext, mut method: ImplItemFn) -> ImplItemFn {
         let MethodContextData {
             is_associated,
             impl_,
@@ -58,27 +58,20 @@ impl MockMethod {
         let arg_types = quote! { ( #( #arg_types ),* ) };
 
         let default_args = method.sig.inputs.iter().map(|i| match i {
+            FnArg::Receiver(r) if r.ty.to_formatted_string() == "Pin<&mut Self>" => {
+                quote!(unsafe { std::pin::Pin::new_unchecked(&mut self.get_unchecked_mut().state) })
+            }
+            FnArg::Receiver(r) if r.ty.to_formatted_string() == "Arc<Self>" => {
+                quote!(Arc::new(self.state.clone()))
+            }
+            FnArg::Receiver(r) if r.ty.to_formatted_string() == "&Arc<Self>" => {
+                quote!(&Arc::new(self.state.clone()))
+            }
             FnArg::Receiver(r) if r.reference.is_some() && r.mutability.is_some() => {
                 quote!(&mut self.state)
             }
             FnArg::Receiver(r) if r.reference.is_some() => quote!(&self.state),
             FnArg::Receiver(_) => quote!(self.state),
-            FnArg::Typed(t) if t.pat.to_formatted_string() == "self" => {
-                match t.ty.to_formatted_string().as_str() {
-                    "Pin<&mut Self>" => {
-                        quote!(unsafe {
-                            std::pin::Pin::new_unchecked(&mut self.get_unchecked_mut().state)
-                        })
-                    }
-                    "Arc<Self>" => {
-                        quote!(Arc::new(self.state.clone()))
-                    }
-                    "&Arc<Self>" => {
-                        quote!(&Arc::new(self.state.clone()))
-                    }
-                    _ => quote!(self.into_state()),
-                }
-            }
             FnArg::Typed(t) => t.pat.to_token_stream(),
         });
         let default_args = quote!( #( #default_args ),* );

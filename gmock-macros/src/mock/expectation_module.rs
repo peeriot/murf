@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{ImplItemMethod, ItemImpl};
+use syn::{ImplItemFn, ItemImpl};
 
 use super::{
     context::{MethodContext, MethodContextData},
@@ -20,7 +20,7 @@ impl ExpectationModule {
         context: MethodContext,
         parsed: &Parsed,
         impl_: &ItemImpl,
-        method: &ImplItemMethod,
+        method: &ImplItemFn,
     ) -> Self {
         let expectation = Expectation::new(context.clone(), impl_);
         let expectation_builder = ExpectationBuilder::new(context.clone(), parsed, method);

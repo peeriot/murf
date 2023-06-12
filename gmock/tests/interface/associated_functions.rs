@@ -9,7 +9,7 @@ mock! {
     pub struct MyStruct;
 
     impl Fuu for MyStruct {
-        fn fuu(x: usize) -> usize;
+        fn fuu(_x: usize) -> usize;
     }
 }
 

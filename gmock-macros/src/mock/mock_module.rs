@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{ImplItem, ImplItemMethod, ItemImpl};
+use syn::{ImplItem, ImplItemFn, ItemImpl};
 
 use super::{
     context::{Context, ContextData, ImplContext, MethodContext},
@@ -77,9 +77,7 @@ impl MockModule {
         item: &ImplItem,
     ) -> ImplItem {
         match item {
-            ImplItem::Method(method) => {
-                ImplItem::Method(self.generate_method(context, parsed, impl_, method))
-            }
+            ImplItem::Fn(f) => ImplItem::Fn(self.generate_method(context, parsed, impl_, f)),
             item => item.clone(),
         }
     }
@@ -89,8 +87,8 @@ impl MockModule {
         context: ImplContext,
         parsed: &Parsed,
         impl_: &ItemImpl,
-        method: &ImplItemMethod,
-    ) -> ImplItemMethod {
+        method: &ImplItemFn,
+    ) -> ImplItemFn {
         let context = MethodContext::new(context, parsed, impl_, method);
 
         let ret = MockMethod::render(&context, method.clone());

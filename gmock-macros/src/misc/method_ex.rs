@@ -1,5 +1,5 @@
 use quote::{quote, ToTokens};
-use syn::{FnArg, ImplItemMethod, Item, ReturnType, Stmt};
+use syn::{FnArg, ImplItemFn, Item, ReturnType, Stmt};
 
 pub trait MethodEx {
     fn is_associated_fn(&self) -> bool;
@@ -7,7 +7,7 @@ pub trait MethodEx {
     fn need_default_impl(&self) -> bool;
 }
 
-impl MethodEx for ImplItemMethod {
+impl MethodEx for ImplItemFn {
     fn is_associated_fn(&self) -> bool {
         self.sig.inputs.iter().all(|i| match i {
             FnArg::Receiver(_) => false,

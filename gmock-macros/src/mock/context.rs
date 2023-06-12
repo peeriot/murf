@@ -4,7 +4,7 @@ use std::sync::Arc;
 use convert_case::{Case, Casing};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use syn::{Generics, ImplItemMethod, ItemImpl, PatType, Path, ReturnType, Type};
+use syn::{Generics, ImplItemFn, ItemImpl, PatType, Path, ReturnType, Type};
 
 use crate::misc::{
     format_expect_call, format_expect_module, format_expectations_field, GenericsEx, InputsEx,
@@ -143,7 +143,7 @@ impl MethodContext {
         context: ImplContext,
         parsed: &Parsed,
         impl_: &ItemImpl,
-        method: &ImplItemMethod,
+        method: &ImplItemFn,
     ) -> Self {
         let is_associated = method.is_associated_fn();
 

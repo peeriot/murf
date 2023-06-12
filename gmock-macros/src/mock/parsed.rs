@@ -1,12 +1,13 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
-    parse::{discouraged::Speculative, Parse, ParseStream, Parser, Result as ParseResult},
-    Attribute, Generics, ImplItem, Item, ItemEnum, ItemImpl, ItemStruct, Meta, NestedMeta, Stmt,
-    Type,
+    parse::{discouraged::Speculative, Parse, ParseStream, Result as ParseResult},
+    parse2,
+    punctuated::Punctuated,
+    token::{Brace, Comma},
+    Attribute, Block, Generics, ImplItem, ImplItemFn, Item, ItemEnum, ItemImpl, ItemStruct, Meta,
+    Path, ReturnType, Stmt, TraitItemFn, Type, Visibility,
 };
-
-use crate::misc::MethodEx;
 
 /// Parsed code inside the mock! macro
 pub struct Parsed {
@@ -18,29 +19,36 @@ pub struct Parsed {
 }
 
 impl Parsed {
-    fn add_default_impl(impl_: &mut ItemImpl) {
+    fn add_default_impl(impl_: &mut ItemImpl) -> ParseResult<()> {
         for i in &mut impl_.items {
-            if let ImplItem::Method(m) = i {
-                if !m.has_default_impl() {
-                    if m.need_default_impl() {
-                        m.block.stmts = vec![Stmt::Item(Item::Verbatim(quote!(
-                            panic!("No default action specified!");
-                        )))];
-                    } else {
-                        m.block.stmts.clear();
-                    }
+            if let ImplItem::Verbatim(ts) = i {
+                let TraitItemFn { attrs, sig, .. } = parse2::<TraitItemFn>(ts.clone())?;
 
-                    let attr =
-                        Parser::parse2(Attribute::parse_outer, quote!(#[allow(unused_variables)]))
-                            .unwrap();
+                let mut block = Block {
+                    brace_token: Brace::default(),
+                    stmts: Vec::new(),
+                };
 
-                    m.attrs.extend(attr);
+                if sig.output != ReturnType::Default {
+                    block.stmts = vec![Stmt::Item(Item::Verbatim(quote!(
+                        panic!("No default action specified!");
+                    )))];
                 }
+
+                *i = ImplItem::Fn(ImplItemFn {
+                    attrs,
+                    vis: Visibility::Inherited,
+                    defaultness: None,
+                    sig,
+                    block,
+                })
             }
         }
+
+        Ok(())
     }
 
-    fn remove_uneeded_derives(ty: &mut TypeToMock) {
+    fn remove_uneeded_derives(ty: &mut TypeToMock) -> ParseResult<()> {
         let attrs = match ty {
             TypeToMock::Enum(o) => Some(&mut o.attrs),
             TypeToMock::Struct(o) => Some(&mut o.attrs),
@@ -49,32 +57,31 @@ impl Parsed {
 
         if let Some(attrs) = attrs {
             for attr in attrs {
-                if let Ok(Meta::List(mut ml)) = attr.parse_meta() {
-                    let i = ml.path.get_ident();
-                    if matches!(i, Some(i) if i == "derive") {
-                        ml.nested = ml
-                            .nested
-                            .into_iter()
-                            .filter(|nm| {
-                                if let NestedMeta::Meta(m) = nm {
-                                    match m.path().get_ident() {
-                                        Some(i) if i == "Send" => false,
-                                        Some(i) if i == "Sync" => false,
-                                        _ => true,
-                                    }
-                                } else {
-                                    true
-                                }
-                            })
-                            .collect();
-                        ml.path.leading_colon = None;
-                        ml.path.segments.clear();
+                if attr.path().is_ident("derive") {
+                    if let Meta::List(ml) = &mut attr.meta {
+                        let mut ret = Option::<Punctuated<Path, Comma>>::None;
 
-                        attr.tokens = ml.to_token_stream();
+                        ml.parse_args_with(|p: ParseStream<'_>| {
+                            let ml = Punctuated::<Path, Comma>::parse_separated_nonempty(p)?;
+
+                            ret = Some(
+                                ml.into_iter()
+                                    .filter(|p| !p.is_ident("Send") && !p.is_ident("Sync"))
+                                    .collect(),
+                            );
+
+                            Ok(())
+                        })?;
+
+                        if let Some(ret) = ret {
+                            ml.tokens = ret.into_token_stream();
+                        }
                     }
                 }
             }
         }
+
+        Ok(())
     }
 }
 
@@ -85,7 +92,7 @@ impl Parse for Parsed {
         let derive_send = ty.derives("Send");
         let derive_sync = ty.derives("Sync");
 
-        Self::remove_uneeded_derives(&mut ty);
+        Self::remove_uneeded_derives(&mut ty)?;
 
         let mut impls = Vec::new();
         while !input.is_empty() {
@@ -105,7 +112,7 @@ impl Parse for Parsed {
                 return Err(input.error("Implementing mock traits for different type in the same mock!{} block is not supported!"));
             }
 
-            Self::add_default_impl(&mut impl_);
+            Self::add_default_impl(&mut impl_)?;
 
             impls.push(impl_);
         }
@@ -176,24 +183,25 @@ impl TypeToMock {
     }
 
     pub fn derives(&self, ident: &str) -> bool {
-        self.attributes().iter().any(|attr| {
-            if let Ok(Meta::List(ml)) = attr.parse_meta() {
-                let i = ml.path.get_ident();
-                if i.map_or(false, |i| *i == "derive") {
-                    ml.nested.iter().any(|nm| {
-                        if let NestedMeta::Meta(m) = nm {
-                            let i = m.path().get_ident();
-                            i.map_or(false, |i| *i == ident)
-                        } else {
-                            false
+        self.attributes().iter().any(|attr| match &attr.meta {
+            Meta::List(ml) if attr.path().is_ident("derive") => {
+                let mut ret = false;
+
+                let _ = ml.parse_args_with(|p: ParseStream<'_>| {
+                    if let Ok(ml) = Punctuated::<Path, Comma>::parse_separated_nonempty(p) {
+                        for p in &ml {
+                            if p.is_ident(ident) {
+                                ret = true;
+                            }
                         }
-                    })
-                } else {
-                    false
-                }
-            } else {
-                false
+                    }
+
+                    Ok(())
+                });
+
+                ret
             }
+            _ => false,
         })
     }
 }
