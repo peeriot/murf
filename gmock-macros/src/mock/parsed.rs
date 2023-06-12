@@ -1,7 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
-    parse::{discouraged::Speculative, Parse, ParseStream, Result as ParseResult},
+    parse::{discouraged::Speculative, Parse, ParseStream, Parser, Result as ParseResult},
     parse2,
     punctuated::Punctuated,
     token::{Brace, Comma},
@@ -22,7 +22,7 @@ impl Parsed {
     fn add_default_impl(impl_: &mut ItemImpl) -> ParseResult<()> {
         for i in &mut impl_.items {
             if let ImplItem::Verbatim(ts) = i {
-                let TraitItemFn { attrs, sig, .. } = parse2::<TraitItemFn>(ts.clone())?;
+                let TraitItemFn { mut attrs, sig, .. } = parse2::<TraitItemFn>(ts.clone())?;
 
                 let mut block = Block {
                     brace_token: Brace::default(),
@@ -34,6 +34,9 @@ impl Parsed {
                         panic!("No default action specified!");
                     )))];
                 }
+
+                let attr = quote!(#[allow(unused_variables)]);
+                attrs.extend(Parser::parse2(Attribute::parse_outer, attr).unwrap());
 
                 *i = ImplItem::Fn(ImplItemFn {
                     attrs,

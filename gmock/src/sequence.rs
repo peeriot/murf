@@ -1,4 +1,4 @@
-use std::cell::UnsafeCell;
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -121,14 +121,14 @@ impl InSequence {
 
     pub fn create_handle() -> Option<SequenceHandle> {
         CURRENT_SEQUENCE.with(|cell| {
-            unsafe { &*cell.get() }
+            cell.borrow()
                 .as_ref()
                 .map(|inner| Inner::create_handle(inner.clone()))
         })
     }
 
     fn new_with(inner: Arc<Mutex<Inner>>) -> Self {
-        let parent = CURRENT_SEQUENCE.with(|cell| unsafe { &mut *cell.get() }.replace(inner));
+        let parent = CURRENT_SEQUENCE.with(|cell| cell.borrow_mut().replace(inner));
 
         Self { parent }
     }
@@ -142,7 +142,7 @@ impl Default for InSequence {
 
 impl Drop for InSequence {
     fn drop(&mut self) {
-        CURRENT_SEQUENCE.with(|cell| unsafe { *cell.get() = self.parent.take() });
+        CURRENT_SEQUENCE.with(|cell| *cell.borrow_mut() = self.parent.take());
     }
 }
 
@@ -233,5 +233,5 @@ impl Default for Inner {
 static SEQUENCE_ID: AtomicUsize = AtomicUsize::new(0);
 
 thread_local! {
-    static CURRENT_SEQUENCE: UnsafeCell<Option<Arc<Mutex<Inner>>>> = UnsafeCell::new(None);
+    static CURRENT_SEQUENCE: RefCell<Option<Arc<Mutex<Inner>>>> = RefCell::new(None);
 }
