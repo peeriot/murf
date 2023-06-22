@@ -1,0 +1,12 @@
+[package]
+name = "murf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+murf-macros = "0.1"
+parking_lot = "0.12"
+
+[dev-dependencies]
+futures = "0.3"
+murf-macros = { version = "*", features = [ ] }

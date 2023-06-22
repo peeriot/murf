@@ -1,9 +1,9 @@
 [workspace]
 members = [
-    "gmock",
-    "gmock-macros"
+    "murf",
+    "murf-macros"
 ]
 
 [patch.crates-io]
-gmock = { path = "gmock" }
-gmock-macros = { path = "gmock-macros" }
+murf = { path = "murf" }
+murf-macros = { path = "murf-macros" }

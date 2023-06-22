@@ -6,13 +6,13 @@ SCRIPT_DIR="$(dirname $0)"
 PROJECT_ROOT="$(readlink -f "$SCRIPT_DIR/../..")"
 
 PACKAGES_TO_CHECK="
-    gmock \
-    gmock-macros \
+    murf \
+    murf-macros \
 "
 
 PACKAGES_TO_TEST="
-    gmock \
-    gmock-macros \
+    murf \
+    murf-macros \
 "
 
 OLD_PWD="$PWD"
