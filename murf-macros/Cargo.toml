@@ -2,6 +2,12 @@
 name = "murf-macros"
 version = "0.1.0"
 edition = "2021"
+description = "Murf's proc macros"
+license = "MIT"
+homepage = "https://github.com/peeriot/murf"
+readme = "README.md"
+keywords = [ "mock", "mocking", "test", "testing" ]
+categories = [ "development-tools::testing" ]
 
 [lib]
 proc-macro = true

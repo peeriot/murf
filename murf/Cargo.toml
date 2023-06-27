@@ -2,6 +2,12 @@
 name = "murf"
 version = "0.1.0"
 edition = "2021"
+description = "A mocking and unit test framework for rust"
+license = "MIT"
+homepage = "https://github.com/peeriot/murf"
+readme = "README.md"
+keywords = [ "mock", "mocking", "test", "testing" ]
+categories = [ "development-tools::testing" ]
 
 [dependencies]
 murf-macros = "0.1"
@@ -9,4 +15,4 @@ parking_lot = "0.12"
 
 [dev-dependencies]
 futures = "0.3"
-murf-macros = { version = "*", features = [ ] }
+murf-macros = { version = "0.1", features = [ ] }
