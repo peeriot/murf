@@ -14,7 +14,7 @@ pub struct Handle {
 
 impl Handle {
     pub fn new(context: Context) -> Self {
-        let ga_handle_extra = context.ga_handle.clone().add_lifetime_clauses("'mock");
+        let ga_handle_extra = context.ga_handle.clone().add_lifetime_bounds("'mock");
 
         Self {
             context,

@@ -9,8 +9,10 @@ use syn::{
 use crate::misc::IterEx;
 
 pub trait GenericsEx {
+    fn get_lifetime_mut(&mut self, lt: &str) -> Option<&mut LifetimeParam>;
+
     fn add_lifetime(self, lt: &str) -> Self;
-    fn add_lifetime_clauses(self, lt: &str) -> Self;
+    fn add_lifetime_bounds(self, lt: &str) -> Self;
 
     fn remove_lifetimes(self, lts: &Punctuated<Lifetime, Comma>) -> Self;
     fn remove_other(self, other: &Generics) -> Self;
@@ -19,6 +21,18 @@ pub trait GenericsEx {
 }
 
 impl GenericsEx for Generics {
+    fn get_lifetime_mut(&mut self, lt: &str) -> Option<&mut LifetimeParam> {
+        for x in &mut self.params {
+            if let GenericParam::Lifetime(x) = x {
+                if x.lifetime.to_string() == lt {
+                    return Some(x);
+                }
+            }
+        }
+
+        None
+    }
+
     fn add_lifetime(mut self, lt: &str) -> Self {
         for x in &self.params {
             if matches!(x, GenericParam::Lifetime(x) if x.lifetime.to_string() == lt) {
@@ -42,7 +56,7 @@ impl GenericsEx for Generics {
         self
     }
 
-    fn add_lifetime_clauses(mut self, lt: &str) -> Self {
+    fn add_lifetime_bounds(mut self, lt: &str) -> Self {
         self.params.iter_mut().for_each(|param| match param {
             GenericParam::Type(t) => {
                 if t.colon_token.is_none() {

@@ -1,9 +1,9 @@
 use quote::{quote, ToTokens};
-use syn::{Generics, ImplItem, ItemImpl, Path};
+use syn::ImplItem;
 
-use crate::misc::GenericsEx;
+use crate::mock::context::ImplContextData;
 
-use super::context::{Context, ContextData};
+use super::context::{Context, ContextData, ImplContext};
 
 pub struct Mock {
     context: Context,
@@ -11,8 +11,7 @@ pub struct Mock {
 }
 
 struct Impl {
-    ga: Generics,
-    trait_: Option<Path>,
+    context: ImplContext,
     items: Vec<ImplItem>,
 }
 
@@ -24,11 +23,8 @@ impl Mock {
         }
     }
 
-    pub fn add_impl(&mut self, impl_: &ItemImpl, items: Vec<ImplItem>) {
-        let ga = impl_.generics.clone().add_lifetime("'mock");
-        let trait_ = impl_.trait_.as_ref().map(|(_, p, _)| p).cloned();
-
-        self.impls.push(Impl { ga, trait_, items });
+    pub fn add_impl(&mut self, context: ImplContext, items: Vec<ImplItem>) {
+        self.impls.push(Impl { context, items });
     }
 }
 
@@ -81,11 +77,16 @@ impl ToTokens for Mock {
         });
 
         let impls = impls.iter().map(|impl_| {
-            let Impl { ga, trait_, items } = impl_;
+            let Impl { context, items } = impl_;
+            let ImplContextData {
+                trait_,
+                ga_impl_mock,
+                ..
+            } = &**context;
 
             let trait_ = trait_.as_ref().map(|t| quote!( #t for ));
 
-            let (ga_impl, _ga_types, _ga_where) = ga.split_for_impl();
+            let (ga_impl, _ga_types, _ga_where) = ga_impl_mock.split_for_impl();
 
             quote! {
                 impl #ga_impl #trait_ Mock #ga_mock_types #ga_mock_where {

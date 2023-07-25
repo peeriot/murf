@@ -2,9 +2,11 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use convert_case::{Case, Casing};
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{FnArg, Generics, ImplItemFn, ItemImpl, Pat, PatType, Path, ReturnType, Type};
+use syn::{
+    FnArg, Generics, ImplItem, ImplItemFn, ItemImpl, Lifetime, Pat, PatType, Path, ReturnType, Type,
+};
 
 use crate::misc::{
     format_expect_call, format_expect_module, format_expectations_field, GenericsEx, ItemImplEx,
@@ -96,17 +98,41 @@ pub struct ImplContext(Arc<ImplContextData>);
 
 impl ImplContext {
     pub fn new(context: Context, impl_: &ItemImpl) -> Self {
+        let ga_impl = impl_.generics.clone();
         let (impl_, lts_temp) = impl_.clone().split_off_temp_lifetimes();
 
-        let ga_impl = impl_.generics.clone();
+        let need_static_lt = impl_.items.iter().any(|i| {
+            if let ImplItem::Fn(f) = i {
+                f.is_associated_fn()
+                    && matches!(&f.sig.output, ReturnType::Type(_, t) if t.contains_self_type())
+            } else {
+                false
+            }
+        });
+
+        let mut ga_impl_mock = ga_impl.clone().add_lifetime("'mock");
+        if need_static_lt {
+            ga_impl_mock
+                .get_lifetime_mut("'mock")
+                .unwrap()
+                .bounds
+                .push(Lifetime::new("'static", Span::call_site()));
+        }
+
+        let trait_ = impl_.trait_.as_ref().map(|(_, p, _)| p).cloned();
 
         Self(Arc::new(ImplContextData {
             context,
 
+            need_static_lt,
+
             impl_,
+            trait_,
+
             lts_temp,
 
             ga_impl,
+            ga_impl_mock,
         }))
     }
 }
@@ -122,10 +148,15 @@ impl Deref for ImplContext {
 pub struct ImplContextData {
     pub context: Context,
 
+    pub need_static_lt: bool,
+
     pub impl_: ItemImpl,
+    pub trait_: Option<Path>,
+
     pub lts_temp: TempLifetimes,
 
     pub ga_impl: Generics,
+    pub ga_impl_mock: Generics,
 }
 
 impl Deref for ImplContextData {
@@ -148,26 +179,13 @@ impl MethodContext {
         let (impl_, lts_temp) = impl_.clone().split_off_temp_lifetimes();
         let trait_ = impl_.trait_.as_ref().map(|(_, x, _)| x).cloned();
 
-        let ga_impl_mock = context.ga_impl.clone().add_lifetime("'mock");
-
-        let mut ga_expectation = context.ga_impl.clone();
-        if !is_associated {
-            ga_expectation = ga_expectation.add_lifetime("'mock");
-        };
-        let ga_expectation = ga_expectation.remove_lifetimes(&lts_temp);
-        let ga_expectation_builder = ga_impl_mock
-            .add_lifetime_clauses("'mock")
-            .add_lifetime("'mock_exp")
-            .remove_lifetimes(&lts_temp);
-        let ga_method = context.ga_impl.clone().remove_other(&context.ga_state);
-
         let args = method.sig.inputs.iter().cloned().collect::<Vec<_>>();
         let ret = method.sig.output.clone();
 
         let (_ga_mock_impl, ga_mock_types, _ga_mock_where) = context.ga_mock.split_for_impl();
-
         let type_mock = Type::Verbatim(quote!( Mock #ga_mock_types ));
 
+        let mut has_self_arg = false;
         let mut lts_mock = lts_temp.clone();
 
         let args_prepared = args
@@ -177,13 +195,19 @@ impl MethodContext {
                     attrs: t.attrs.clone(),
                     pat: Box::new(Pat::Verbatim(quote!(this))),
                     colon_token: Default::default(),
-                    ty: Box::new(t.ty.clone().replace_self_type(&type_mock)),
+                    ty: Box::new(
+                        t.ty.clone()
+                            .replace_self_type_checked(&type_mock, &mut has_self_arg),
+                    ),
                 },
                 FnArg::Typed(t) => PatType {
                     attrs: t.attrs.clone(),
                     pat: t.pat.clone(),
                     colon_token: t.colon_token,
-                    ty: Box::new(t.ty.clone().replace_self_type(&type_mock)),
+                    ty: Box::new(
+                        t.ty.clone()
+                            .replace_self_type_checked(&type_mock, &mut has_self_arg),
+                    ),
                 },
             })
             .collect::<Vec<_>>();
@@ -206,12 +230,42 @@ impl MethodContext {
             })
             .collect();
 
-        let return_type = ret.to_action_return_type(&type_mock);
+        let mut has_self_ret = false;
+        let return_type = ret.to_action_return_type_checked(&type_mock, &mut has_self_ret);
 
         let ident_method = method.sig.ident.clone();
         let ident_expect_method = format_expect_call(&ident_method, trait_.as_ref());
         let ident_expectation_module = format_expect_module(&ident_method, trait_.as_ref());
         let ident_expectation_field = format_expectations_field(&ident_expectation_module);
+
+        let ga_impl_mock = context.ga_impl.clone().add_lifetime("'mock");
+
+        let mut ga_expectation = context.ga_impl.clone();
+        if !is_associated || has_self_arg || has_self_ret {
+            ga_expectation = ga_expectation.add_lifetime("'mock");
+            if is_associated && has_self_ret {
+                ga_expectation
+                    .get_lifetime_mut("'mock")
+                    .unwrap()
+                    .bounds
+                    .push(Lifetime::new("'static", Span::call_site()))
+            }
+        };
+        let ga_expectation = ga_expectation.remove_lifetimes(&lts_temp);
+
+        let mut ga_expectation_builder = ga_impl_mock
+            .add_lifetime_bounds("'mock")
+            .add_lifetime("'mock_exp")
+            .remove_lifetimes(&lts_temp);
+        if is_associated && has_self_ret {
+            ga_expectation_builder
+                .get_lifetime_mut("'mock")
+                .unwrap()
+                .bounds
+                .push(Lifetime::new("'static", Span::call_site()))
+        }
+
+        let ga_method = context.ga_impl.clone().remove_other(&context.ga_state);
 
         Self(Arc::new(MethodContextData {
             context,

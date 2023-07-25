@@ -66,7 +66,7 @@ impl MockModule {
             .map(|item| self.generate_item(context.clone(), parsed, impl_, item))
             .collect();
 
-        self.mock.add_impl(impl_, items);
+        self.mock.add_impl(context, items);
     }
 
     fn generate_item(

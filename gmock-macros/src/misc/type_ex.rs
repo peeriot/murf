@@ -15,6 +15,7 @@ pub trait TypeEx {
     fn contains_self_type(&self) -> bool;
 
     fn replace_self_type(self, type_: &Type) -> Self;
+    fn replace_self_type_checked(self, type_: &Type, changed: &mut bool) -> Self;
     fn replace_default_lifetime(self, lts: &mut TempLifetimes) -> Self;
 
     fn make_static(self) -> Self;
@@ -82,9 +83,16 @@ impl TypeEx for Type {
         visitor.result
     }
 
-    fn replace_self_type(mut self, type_: &Type) -> Self {
+    fn replace_self_type(self, type_: &Type) -> Self {
+        let mut changed = false;
+
+        self.replace_self_type_checked(type_, &mut changed)
+    }
+
+    fn replace_self_type_checked(mut self, type_: &Type, changed: &mut bool) -> Self {
         struct Visitor<'a> {
             type_: &'a Type,
+            changed: &'a mut bool,
         }
 
         impl<'a> TypeVisitor for Visitor<'a> {
@@ -94,6 +102,7 @@ impl TypeEx for Type {
                 if let Type::Path(t) = ty {
                     if t.path.segments.len() == 1 && t.path.segments[0].ident == "Self" {
                         *ty = self.type_.clone();
+                        *self.changed = true;
                     }
                 }
 
@@ -101,7 +110,7 @@ impl TypeEx for Type {
             }
         }
 
-        let mut visitor = Visitor { type_ };
+        let mut visitor = Visitor { type_, changed };
 
         visitor.visit(unsafe_cell_mut(&mut self));
 

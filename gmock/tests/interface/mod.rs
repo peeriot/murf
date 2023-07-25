@@ -3,6 +3,7 @@ mod argument_with_lifetime;
 mod associated_functions;
 mod associated_type_trait;
 mod clonable_mock;
+mod constructor_with_args;
 mod expect_call;
 mod exsiting_type;
 mod generic_associated_type_trait;
