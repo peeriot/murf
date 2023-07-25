@@ -220,15 +220,6 @@ impl MethodContext {
                 t
             })
             .collect::<Vec<_>>();
-        let args_prepared_static = args_prepared
-            .iter()
-            .cloned()
-            .map(|mut t| {
-                t.ty = Box::new(t.ty.make_static());
-
-                t
-            })
-            .collect();
 
         let mut has_self_ret = false;
         let return_type = ret.to_action_return_type_checked(&type_mock, &mut has_self_ret);
@@ -287,7 +278,6 @@ impl MethodContext {
 
             args_prepared,
             args_prepared_lt,
-            args_prepared_static,
             return_type,
 
             ident_method,
@@ -326,7 +316,6 @@ pub struct MethodContextData {
 
     pub args_prepared: Vec<PatType>,
     pub args_prepared_lt: Vec<PatType>,
-    pub args_prepared_static: Vec<PatType>,
     pub return_type: Type,
 
     pub ident_method: Ident,

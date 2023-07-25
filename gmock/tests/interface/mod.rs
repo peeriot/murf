@@ -9,6 +9,7 @@ mod exsiting_type;
 mod generic_associated_type_trait;
 mod generic_trait;
 mod in_sequence;
+mod local_context;
 mod no_default;
 mod reference_argument;
 mod return_self_type;

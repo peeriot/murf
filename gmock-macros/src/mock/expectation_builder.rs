@@ -68,8 +68,13 @@ impl ToTokens for ExpectationBuilder {
             quote! {
                 let expectation: Box<dyn gmock::Expectation + Send + Sync + 'static> = Box::new(expectation);
                 let expectation = Arc::new(Mutex::new(expectation));
+                let weak = Arc::downgrade(&expectation);
 
-                EXPECTATIONS.lock().push(Arc::downgrade(&expectation));
+                if let Some(local) = gmock::LocalContext::current().borrow_mut().as_mut() {
+                    local.push(*TYPE_ID, weak)
+                } else {
+                    EXPECTATIONS.lock().push(weak);
+                };
             }
         } else {
             quote! {

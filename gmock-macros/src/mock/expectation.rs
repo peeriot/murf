@@ -69,7 +69,6 @@ impl ToTokens for Expectation {
 
             args_prepared,
             args_prepared_lt,
-            args_prepared_static,
             return_type,
             ..
         } = &**context;
@@ -99,7 +98,6 @@ impl ToTokens for Expectation {
 
         let arg_types_prepared = args_prepared.iter().map(|t| &t.ty).parenthesis();
         let arg_types_prepared_lt = args_prepared_lt.iter().map(|t| &t.ty).parenthesis();
-        let arg_types_prepared_static = args_prepared_static.iter().map(|t| &t.ty).parenthesis();
 
         let ga_expectation_phantom = ga_expectation.make_phantom_data();
         let (ga_expectation_impl, ga_expectation_types, ga_expectation_where) =
@@ -139,6 +137,10 @@ impl ToTokens for Expectation {
             }
 
             impl #ga_expectation_impl gmock::Expectation for Expectation #ga_expectation_types #ga_expectation_where {
+                fn type_id(&self) -> usize {
+                    *TYPE_ID
+                }
+
                 fn is_ready(&self) -> bool {
                     self.times.is_ready()
                 }
@@ -147,10 +149,6 @@ impl ToTokens for Expectation {
                     for seq_handle in &self.sequences {
                         seq_handle.set_done();
                     }
-                }
-
-                fn args_type_id(&self) -> &'static str {
-                    type_name::<#arg_types_prepared_static>()
                 }
             }
 

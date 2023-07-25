@@ -4,7 +4,10 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::fmt::Display;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Mutex,
+};
 
 pub trait Pointee<T> {
     fn get(&self) -> T;
@@ -58,7 +61,13 @@ where
 /* Expectation */
 
 pub trait Expectation: Display {
+    fn type_id(&self) -> usize;
     fn is_ready(&self) -> bool;
     fn set_done(&self);
-    fn args_type_id(&self) -> &'static str;
 }
+
+pub fn next_type_id() -> usize {
+    NEXT_TYPE_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+static NEXT_TYPE_ID: AtomicUsize = AtomicUsize::new(0);

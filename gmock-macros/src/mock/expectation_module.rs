@@ -60,7 +60,7 @@ impl ToTokens for ExpectationModule {
         };
 
         tokens.extend(quote! {
-            mod #ident_expectation_module {
+            pub mod #ident_expectation_module {
                 use std::marker::PhantomData;
                 use std::fmt::{Display, Formatter, Result as FmtResult};
 
@@ -75,6 +75,8 @@ impl ToTokens for ExpectationModule {
                 #expectation_builder
 
                 #associated_expectations
+
+                pub static TYPE_ID: Lazy<usize> = Lazy::new(|| gmock::next_type_id());
             }
         });
     }

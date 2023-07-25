@@ -19,13 +19,12 @@ impl MockMethod {
             args,
             ret,
             args_prepared,
-            args_prepared_static,
             ..
         } = &**context;
 
         let locked = if *is_associated {
             quote! {
-                let mut locked = #ident_expectation_module::EXPECTATIONS.lock();
+                let locked = #ident_expectation_module::EXPECTATIONS.lock();
             }
         } else {
             quote! {
@@ -35,7 +34,14 @@ impl MockMethod {
         };
 
         let expectations_iter = if *is_associated {
-            quote!(&mut *locked)
+            quote! {
+                gmock::LocalContext::current()
+                    .borrow()
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|x| x.expectations(*#ident_expectation_module::TYPE_ID))
+                    .chain(&*locked)
+            }
         } else {
             quote!(&mut locked.#ident_expectation_field)
         };
@@ -53,8 +59,6 @@ impl MockMethod {
 
         let (_ga_expectation_impl, ga_expectation_types, _ga_expectation_where) =
             ga_expectation.split_for_impl();
-
-        let arg_types_prepared_static = args_prepared_static.iter().map(|t| &t.ty).parenthesis();
 
         let arg_names = args
             .iter()
@@ -155,21 +159,17 @@ impl MockMethod {
                 let _ = writeln!(msg, "- {}", ex);
 
                 /* type matches? */
-                if ex.args_type_id() != type_name::<#arg_types_prepared_static>() {
-                    let _ = writeln!(msg, "    The type mismatched");
-                    continue;
-                }
-                let _ = writeln!(msg, "    The type matched");
+                assert_eq!(ex.type_id(), *#ident_expectation_module::TYPE_ID);
 
                 let ex: &mut dyn gmock::Expectation = &mut **ex;
                 let ex = unsafe { &mut *(ex as *mut dyn gmock::Expectation as *mut #ident_expectation_module::Expectation #ga_expectation_types) };
 
                 /* value matches? */
                 if !ex.matches(&args) {
-                    let _ = writeln!(msg, "    but the value mismatched");
+                    let _ = writeln!(msg, "    The value mismatched");
                     continue;
                 }
-                let _ = writeln!(msg, "    and the value matched");
+                let _ = writeln!(msg, "    The value matched");
 
                 /* is done? */
                 let all_sequences_done = !ex.sequences.is_empty() && ex.sequences.iter().all(|s| s.is_done());
