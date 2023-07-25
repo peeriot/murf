@@ -6,6 +6,8 @@ use syn::{
     GenericParam, Generics, Lifetime, LifetimeParam, TypeParamBound,
 };
 
+use crate::misc::IterEx;
+
 pub trait GenericsEx {
     fn add_lifetime(self, lt: &str) -> Self;
     fn add_lifetime_clauses(self, lt: &str) -> Self;
@@ -115,24 +117,28 @@ impl GenericsEx for Generics {
     }
 
     fn make_phantom_data(&self) -> TokenStream {
-        let params = self.params.iter().map(|param| match param {
-            GenericParam::Lifetime(lt) => {
-                let lt = &lt.lifetime;
+        let params = self
+            .params
+            .iter()
+            .map(|param| match param {
+                GenericParam::Lifetime(lt) => {
+                    let lt = &lt.lifetime;
 
-                quote!(& #lt ())
-            }
-            GenericParam::Type(ty) => {
-                let ident = &ty.ident;
+                    quote!(& #lt ())
+                }
+                GenericParam::Type(ty) => {
+                    let ident = &ty.ident;
 
-                quote!(#ident)
-            }
-            GenericParam::Const(ct) => {
-                let ident = &ct.ident;
+                    quote!(#ident)
+                }
+                GenericParam::Const(ct) => {
+                    let ident = &ct.ident;
 
-                quote!(#ident)
-            }
-        });
+                    quote!(#ident)
+                }
+            })
+            .parenthesis();
 
-        quote!(PhantomData<(#( #params ),*)>)
+        quote!(PhantomData<#params>)
     }
 }

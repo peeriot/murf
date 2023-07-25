@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::ItemImpl;
 
-use crate::misc::{FormattedString, GenericsEx, TempLifetimes};
+use crate::misc::{FormattedString, GenericsEx, IterEx, TempLifetimes};
 
 use super::context::{ContextData, ImplContextData, MethodContext, MethodContextData};
 
@@ -97,12 +97,9 @@ impl ToTokens for Expectation {
             quote!(+ 'mock)
         };
 
-        let arg_types_prepared = args_prepared.iter().map(|t| &t.ty).collect::<Vec<_>>();
-        let arg_types_prepared_lt = args_prepared_lt.iter().map(|t| &t.ty).collect::<Vec<_>>();
-        let arg_types_prepared_static = args_prepared_static
-            .iter()
-            .map(|t| &t.ty)
-            .collect::<Vec<_>>();
+        let arg_types_prepared = args_prepared.iter().map(|t| &t.ty).parenthesis();
+        let arg_types_prepared_lt = args_prepared_lt.iter().map(|t| &t.ty).parenthesis();
+        let arg_types_prepared_static = args_prepared_static.iter().map(|t| &t.ty).parenthesis();
 
         let ga_expectation_phantom = ga_expectation.make_phantom_data();
         let (ga_expectation_impl, ga_expectation_types, ga_expectation_where) =
@@ -112,8 +109,8 @@ impl ToTokens for Expectation {
             pub struct Expectation #ga_expectation_impl #ga_expectation_where {
                 pub times: Times,
                 pub description: Option<String>,
-                pub action: Option<Box<dyn #lts_mock RepeatableAction<( #( #arg_types_prepared_lt ),* ), #return_type> #trait_send #trait_sync #lt>>,
-                pub matcher: Option<Box<dyn #lts_mock Matcher<( #( #arg_types_prepared_lt ),* )> #trait_send #trait_sync #lt>>,
+                pub action: Option<Box<dyn #lts_mock RepeatableAction<#arg_types_prepared_lt, #return_type> #trait_send #trait_sync #lt>>,
+                pub matcher: Option<Box<dyn #lts_mock Matcher<#arg_types_prepared_lt> #trait_send #trait_sync #lt>>,
                 pub sequences: Vec<SequenceHandle>,
                 _marker: #ga_expectation_phantom,
             }
@@ -132,7 +129,7 @@ impl ToTokens for Expectation {
             }
 
             impl #ga_expectation_impl Expectation #ga_expectation_types #ga_expectation_where {
-                pub fn matches #lts_temp (&self, args: &( #( #arg_types_prepared ),* )) -> bool {
+                pub fn matches #lts_temp (&self, args: &#arg_types_prepared) -> bool {
                     if let Some(m) = &self.matcher {
                         m.matches(args)
                     } else {
@@ -153,7 +150,7 @@ impl ToTokens for Expectation {
                 }
 
                 fn args_type_id(&self) -> &'static str {
-                    type_name::<( #( #arg_types_prepared_static ),* )>()
+                    type_name::<#arg_types_prepared_static>()
                 }
             }
 

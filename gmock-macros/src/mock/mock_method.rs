@@ -1,7 +1,7 @@
 use quote::{quote, ToTokens};
 use syn::{FnArg, ImplItemFn, Item, PatType, ReturnType, Stmt, Type};
 
-use crate::misc::{FormattedString, TypeEx};
+use crate::misc::{FormattedString, IterEx, TypeEx};
 
 use super::context::{MethodContext, MethodContextData};
 
@@ -54,19 +54,17 @@ impl MockMethod {
         let (_ga_expectation_impl, ga_expectation_types, _ga_expectation_where) =
             ga_expectation.split_for_impl();
 
-        let arg_types_prepared_static = args_prepared_static
+        let arg_types_prepared_static = args_prepared_static.iter().map(|t| &t.ty).parenthesis();
+
+        let arg_names = args
             .iter()
-            .map(|t| &t.ty)
-            .collect::<Vec<_>>();
+            .map(|arg| match arg {
+                FnArg::Receiver(_) => quote!(self),
+                FnArg::Typed(PatType { pat, .. }) => quote!( #pat ),
+            })
+            .parenthesis();
 
-        let arg_names = args.iter().map(|arg| match arg {
-            FnArg::Receiver(_) => quote!(self),
-            FnArg::Typed(PatType { pat, .. }) => quote!( #pat ),
-        });
-        let arg_names = quote! { ( #( #arg_names ),* ) };
-
-        let arg_names_prepared = args_prepared.iter().map(|arg| &arg.pat);
-        let arg_names_prepared = quote! { ( #( #arg_names_prepared ),* ) };
+        let arg_names_prepared = args_prepared.iter().map(|arg| &arg.pat).parenthesis();
 
         let default_args = method.sig.inputs.iter().map(|i| match i {
             FnArg::Receiver(r) if r.ty.to_formatted_string() == "Pin<&mut Self>" => {
@@ -85,7 +83,6 @@ impl MockMethod {
             FnArg::Receiver(_) => quote!(this.state),
             FnArg::Typed(t) => t.pat.to_token_stream(),
         });
-        let default_args = quote!( #( #default_args ),* );
 
         let default_action = if let Some(t) = trait_ {
             let method = &method.sig.ident;
@@ -118,7 +115,14 @@ impl MockMethod {
                     shared: this.shared.clone(),
                     handle: this.handle.clone(),
                 }>),
-                t if t.contains_self_type() => quote!(Self::from_state(ret, this.shared.clone())),
+                t if t.contains_self_type() => {
+                    let s = format!(
+                        "No default conversion for `{}` or expectation {{}}",
+                        t.to_formatted_string()
+                    );
+
+                    quote!(panic!(#s, ex))
+                }
                 _ => quote!(ret),
             },
         };
@@ -151,7 +155,7 @@ impl MockMethod {
                 let _ = writeln!(msg, "- {}", ex);
 
                 /* type matches? */
-                if ex.args_type_id() != type_name::<( #( #arg_types_prepared_static ),* )>() {
+                if ex.args_type_id() != type_name::<#arg_types_prepared_static>() {
                     let _ = writeln!(msg, "    The type mismatched");
                     continue;
                 }
@@ -206,7 +210,7 @@ impl MockMethod {
                     action.exec(args)
                 } else {
                     let #arg_names_prepared = args;
-                    let ret = #default_action ( #default_args );
+                    let ret = #default_action ( #( #default_args ),* );
 
                     #result
                 };

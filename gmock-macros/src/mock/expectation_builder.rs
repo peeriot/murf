@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::ImplItemFn;
 
-use crate::misc::{MethodEx, TempLifetimes};
+use crate::misc::{IterEx, MethodEx, TempLifetimes};
 
 use super::{
     context::{ContextData, MethodContext, MethodContextData},
@@ -62,7 +62,7 @@ impl ToTokens for ExpectationBuilder {
             quote!( + 'mock)
         };
 
-        let arg_types_prepared_lt = args_prepared_lt.iter().map(|t| &t.ty).collect::<Vec<_>>();
+        let arg_types_prepared_lt = args_prepared_lt.iter().map(|t| &t.ty).parenthesis();
 
         let drop_handler = if *is_associated {
             quote! {
@@ -111,7 +111,7 @@ impl ToTokens for ExpectationBuilder {
                     self
                 }
 
-                pub fn with<M: #lts_mock Matcher<( #( #arg_types_prepared_lt ),* )> #trait_send #trait_sync #lt>(mut self, matcher: M) -> Self {
+                pub fn with<M: #lts_mock Matcher<#arg_types_prepared_lt> #trait_send #trait_sync #lt>(mut self, matcher: M) -> Self {
                     self.expectation.as_mut().unwrap().matcher = Some(Box::new(matcher));
 
                     self
@@ -143,14 +143,14 @@ impl ToTokens for ExpectationBuilder {
 
                 pub fn will_once<A>(self, action: A)
                 where
-                    A: #lts_mock Action<( #( #arg_types_prepared_lt ),* ), #return_type> #trait_send #trait_sync #lt,
+                    A: #lts_mock Action<#arg_types_prepared_lt, #return_type> #trait_send #trait_sync #lt,
                 {
                     self.times(1).expectation.as_mut().unwrap().action = Some(Box::new(OnetimeAction::new(action)));
                 }
 
                 pub fn will_repeatedly<A>(mut self, action: A)
                 where
-                    A: #lts_mock Action<( #( #arg_types_prepared_lt ),* ), #return_type> #trait_send #trait_sync + Clone #lt,
+                    A: #lts_mock Action<#arg_types_prepared_lt, #return_type> #trait_send #trait_sync + Clone #lt,
                 {
                     self.expectation.as_mut().unwrap().action = Some(Box::new(RepeatedAction::new(action)));
                 }

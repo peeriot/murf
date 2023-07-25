@@ -10,7 +10,7 @@ use syn::{
     Expr, ExprCall, Path, Result as ParseResult, Token, Type,
 };
 
-use crate::misc::format_expect_call;
+use crate::misc::{format_expect_call, IterEx};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CallMode {
@@ -105,9 +105,10 @@ impl ToTokens for Call {
             let args = call_method
                 .then(|| Cow::Owned(Expr::Verbatim(quote!(gmock::matcher::any()))))
                 .into_iter()
-                .chain(args);
+                .chain(args)
+                .parenthesis();
 
-            quote!(.with(gmock::matcher::multi((#( #args ),*))))
+            quote!(.with(gmock::matcher::multi(#args)))
         };
 
         tokens.extend(quote! {

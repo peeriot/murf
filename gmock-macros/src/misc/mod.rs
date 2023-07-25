@@ -1,6 +1,7 @@
 mod formatted_string;
 mod generics_ex;
 mod item_impl_ex;
+mod iter_ex;
 mod method_ex;
 mod return_type_ex;
 mod temp_lifetimes;
@@ -14,6 +15,7 @@ use syn::Path;
 pub use formatted_string::FormattedString;
 pub use generics_ex::GenericsEx;
 pub use item_impl_ex::ItemImplEx;
+pub use iter_ex::IterEx;
 pub use method_ex::MethodEx;
 pub use return_type_ex::ReturnTypeEx;
 pub use temp_lifetimes::TempLifetimes;
