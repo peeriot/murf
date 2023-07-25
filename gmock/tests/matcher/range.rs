@@ -15,7 +15,7 @@ mock! {
 
 #[test]
 fn success() {
-    let mock = MyStruct::mock();
+    let mock = MyStructMock::default();
 
     expect_call!(mock as Fuu, fuu(range(4..=6)));
 

@@ -42,6 +42,7 @@ impl ToTokens for Mock {
             ga_mock,
             ga_handle,
             derive_clone,
+            derive_default,
             ..
         } = &**context;
 
@@ -49,7 +50,7 @@ impl ToTokens for Mock {
         let (_ga_state_impl, ga_state_types, _ga_state_where) = ga_state.split_for_impl();
         let (_ga_handle_impl, ga_handle_types, _ga_handle_where) = ga_handle.split_for_impl();
 
-        let mock_default_clone_impl = derive_clone.then(|| {
+        let mock_clone_impl = derive_clone.then(|| {
             quote! {
                 impl #ga_mock_impl Clone for Mock #ga_mock_types #ga_mock_where {
                     fn clone(&self) -> Self {
@@ -58,6 +59,22 @@ impl ToTokens for Mock {
                             shared: self.shared.clone(),
                             handle: self.handle.clone(),
                         }
+                    }
+                }
+            }
+        });
+
+        let mock_default_impl = derive_default.then(|| {
+            quote! {
+                impl #ga_mock_impl Mock #ga_mock_types #ga_mock_where {
+                    pub fn new() -> Self {
+                        Self::from_state(Default::default())
+                    }
+                }
+
+                impl #ga_mock_impl Default for Mock #ga_mock_types #ga_mock_where {
+                    fn default() -> Self {
+                        Self::new()
                     }
                 }
             }
@@ -85,6 +102,21 @@ impl ToTokens for Mock {
             }
 
             impl #ga_mock_impl Mock #ga_mock_types #ga_mock_where {
+                pub fn from_state(state: #ident_state #ga_state_types) -> Self {
+                    let shared = Arc::new(Mutex::new(Shared::default()));
+                    let handle = Handle {
+                        shared: shared.clone(),
+                        check_on_drop: true,
+                    };
+                    let mock = Self {
+                        state,
+                        shared,
+                        handle: Some(handle),
+                    };
+
+                    mock
+                }
+
                 pub fn mock_handle(&self) -> &Handle #ga_handle_types {
                     if let Some(handle) = &self.handle {
                         handle
@@ -112,7 +144,8 @@ impl ToTokens for Mock {
                 }
             }
 
-            #mock_default_clone_impl
+            #mock_clone_impl
+            #mock_default_impl
 
             #( #impls )*
         })

@@ -31,6 +31,7 @@ pub struct ContextData {
     pub derive_send: bool,
     pub derive_sync: bool,
     pub derive_clone: bool,
+    pub derive_default: bool,
 
     pub trait_send: Option<TokenStream>,
     pub trait_sync: Option<TokenStream>,
@@ -54,6 +55,7 @@ impl Context {
         let derive_send = parsed.derive_send;
         let derive_sync = parsed.derive_sync;
         let derive_clone = parsed.ty.derives("Clone");
+        let derive_default = parsed.ty.derives("Default");
 
         let trait_send = derive_send.then(|| quote!(+ Send));
         let trait_sync = derive_sync.then(|| quote!(+ Sync));
@@ -71,6 +73,7 @@ impl Context {
             derive_send,
             derive_sync,
             derive_clone,
+            derive_default,
 
             trait_send,
             trait_sync,

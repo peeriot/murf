@@ -44,18 +44,7 @@ impl ToTokens for Mockable {
                 type Handle<'mock> = #ident_module::Handle #ga_handle_types;
 
                 fn into_mock<'mock>(self) -> Self::Mock<'mock> {
-                    let shared = Arc::new(Mutex::new(#ident_module::Shared::default()));
-                    let handle = #ident_module::Handle {
-                        shared: shared.clone(),
-                        check_on_drop: true,
-                    };
-                    let mock = #ident_module::Mock {
-                        state: self,
-                        shared,
-                        handle: Some(handle),
-                    };
-
-                    mock
+                    Self::Mock::from_state(self)
                 }
 
                 fn into_mock_with_handle<'mock>(self) -> (Self::Handle<'mock>, Self::Mock<'mock>) {
