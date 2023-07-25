@@ -1,4 +1,4 @@
-use gmock::{expect_call, matcher::eq, mock, Sequence};
+use gmock::{expect_method_call, matcher::eq, mock, Sequence};
 
 trait Fuu {
     fn fuu(&self, x: usize);
@@ -18,8 +18,8 @@ fn success() {
     let seq = Sequence::default();
     let (handle, mock) = MyStruct::mock_with_handle();
 
-    expect_call!(handle as Fuu, fuu(eq(1))).in_sequence(&seq);
-    expect_call!(handle as Fuu, fuu(eq(2))).in_sequence(&seq);
+    expect_method_call!(handle as Fuu, fuu(eq(1))).in_sequence(&seq);
+    expect_method_call!(handle as Fuu, fuu(eq(2))).in_sequence(&seq);
 
     mock.fuu(1);
     mock.fuu(2);
@@ -31,8 +31,8 @@ fn failure() {
     let seq = Sequence::default();
     let (handle, mock) = MyStruct::mock_with_handle();
 
-    expect_call!(handle as Fuu, fuu(eq(1))).in_sequence(&seq);
-    expect_call!(handle as Fuu, fuu(eq(2))).in_sequence(&seq);
+    expect_method_call!(handle as Fuu, fuu(eq(1))).in_sequence(&seq);
+    expect_method_call!(handle as Fuu, fuu(eq(2))).in_sequence(&seq);
 
     mock.fuu(2);
     mock.fuu(1);
@@ -45,9 +45,9 @@ fn multi_sequence() {
 
     let (handle, mock) = MyStruct::mock_with_handle();
 
-    expect_call!(handle as Fuu, fuu(eq(1))).add_sequence(&seq0);
-    expect_call!(handle as Fuu, fuu(eq(2))).add_sequence(&seq1);
-    expect_call!(handle as Fuu, fuu(eq(3)))
+    expect_method_call!(handle as Fuu, fuu(eq(1))).add_sequence(&seq0);
+    expect_method_call!(handle as Fuu, fuu(eq(2))).add_sequence(&seq1);
+    expect_method_call!(handle as Fuu, fuu(eq(3)))
         .add_sequence(&seq0)
         .add_sequence(&seq1);
     mock.fuu(1);
@@ -55,9 +55,9 @@ fn multi_sequence() {
     mock.fuu(3);
     handle.checkpoint();
 
-    expect_call!(handle as Fuu, fuu(eq(1))).add_sequence(&seq0);
-    expect_call!(handle as Fuu, fuu(eq(2))).add_sequence(&seq1);
-    expect_call!(handle as Fuu, fuu(eq(3)))
+    expect_method_call!(handle as Fuu, fuu(eq(1))).add_sequence(&seq0);
+    expect_method_call!(handle as Fuu, fuu(eq(2))).add_sequence(&seq1);
+    expect_method_call!(handle as Fuu, fuu(eq(3)))
         .add_sequence(&seq0)
         .add_sequence(&seq1);
     mock.fuu(2);

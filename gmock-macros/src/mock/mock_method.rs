@@ -1,5 +1,5 @@
 use quote::{quote, ToTokens};
-use syn::{FnArg, ImplItemFn, Item, ReturnType, Stmt, Type};
+use syn::{FnArg, ImplItemFn, Item, PatType, ReturnType, Stmt, Type};
 
 use crate::misc::{FormattedString, TypeEx};
 
@@ -17,6 +17,9 @@ impl MockMethod {
             ident_expectation_module,
             ident_expectation_field,
             args,
+            ret,
+            args_prepared,
+            args_prepared_static,
             ..
         } = &**context;
 
@@ -26,7 +29,8 @@ impl MockMethod {
             }
         } else {
             quote! {
-                let mut locked = self.shared.lock();
+                let shared = self.shared.clone();
+                let mut locked = shared.lock();
             }
         };
 
@@ -47,37 +51,45 @@ impl MockMethod {
             }
         });
 
-        let self_ty = &impl_.self_ty;
         let (_ga_expectation_impl, ga_expectation_types, _ga_expectation_where) =
             ga_expectation.split_for_impl();
 
-        let args_name = args.iter().map(|i| &i.pat);
-        let args_name = quote! { ( #( #args_name ),* ) };
+        let arg_types_prepared_static = args_prepared_static
+            .iter()
+            .map(|t| &t.ty)
+            .collect::<Vec<_>>();
 
-        let arg_types = args.iter().map(|i| &i.ty);
-        let arg_types = quote! { ( #( #arg_types ),* ) };
+        let arg_names = args.iter().map(|arg| match arg {
+            FnArg::Receiver(_) => quote!(self),
+            FnArg::Typed(PatType { pat, .. }) => quote!( #pat ),
+        });
+        let arg_names = quote! { ( #( #arg_names ),* ) };
+
+        let arg_names_prepared = args_prepared.iter().map(|arg| &arg.pat);
+        let arg_names_prepared = quote! { ( #( #arg_names_prepared ),* ) };
 
         let default_args = method.sig.inputs.iter().map(|i| match i {
             FnArg::Receiver(r) if r.ty.to_formatted_string() == "Pin<&mut Self>" => {
-                quote!(unsafe { std::pin::Pin::new_unchecked(&mut self.get_unchecked_mut().state) })
+                quote!(unsafe { std::pin::Pin::new_unchecked(&mut this.get_unchecked_mut().state) })
             }
             FnArg::Receiver(r) if r.ty.to_formatted_string() == "Arc<Self>" => {
-                quote!(Arc::new(self.state.clone()))
+                quote!(Arc::new(this.state.clone()))
             }
             FnArg::Receiver(r) if r.ty.to_formatted_string() == "&Arc<Self>" => {
-                quote!(&Arc::new(self.state.clone()))
+                quote!(&Arc::new(this.state.clone()))
             }
             FnArg::Receiver(r) if r.reference.is_some() && r.mutability.is_some() => {
-                quote!(&mut self.state)
+                quote!(&mut this.state)
             }
-            FnArg::Receiver(r) if r.reference.is_some() => quote!(&self.state),
-            FnArg::Receiver(_) => quote!(self.state),
+            FnArg::Receiver(r) if r.reference.is_some() => quote!(&this.state),
+            FnArg::Receiver(_) => quote!(this.state),
             FnArg::Typed(t) => t.pat.to_token_stream(),
         });
         let default_args = quote!( #( #default_args ),* );
 
         let default_action = if let Some(t) = trait_ {
             let method = &method.sig.ident;
+            let self_ty = &impl_.self_ty;
 
             quote!(<#self_ty as #t>::#method)
         } else {
@@ -87,26 +99,26 @@ impl MockMethod {
             quote!(#t::#method)
         };
 
-        let result = match &method.sig.output {
+        let result = match ret {
             ReturnType::Default => quote!(ret),
             ReturnType::Type(_, t) => match &**t {
                 Type::Reference(r)
                     if r.mutability.is_some() && r.elem.to_formatted_string() == "Self" =>
                 {
-                    quote!(&mut self)
+                    quote!(&mut this)
                 }
-                Type::Reference(r) if r.elem.to_formatted_string() == "Self" => quote!(&self),
+                Type::Reference(r) if r.elem.to_formatted_string() == "Self" => quote!(&this),
                 t if t.to_formatted_string() == "Self" => quote!(Self {
                     state: ret,
-                    shared: self.shared.clone(),
-                    handle: self.handle.clone(),
+                    shared: this.shared.clone(),
+                    handle: this.handle.clone(),
                 }),
                 t if t.to_formatted_string() == "Box<Self>" => quote!(Box<Self {
                     state: ret,
-                    shared: self.shared.clone(),
-                    handle: self.handle.clone(),
+                    shared: this.shared.clone(),
+                    handle: this.handle.clone(),
                 }>),
-                t if t.contains_self_type() => quote!(Self::from_state(ret, self.shared.clone())),
+                t if t.contains_self_type() => quote!(Self::from_state(ret, this.shared.clone())),
                 _ => quote!(ret),
             },
         };
@@ -127,7 +139,7 @@ impl MockMethod {
 
         method.block.stmts = vec![Stmt::Item(Item::Verbatim(quote! {
             #locked
-            let args = #args_name;
+            let args = #arg_names;
 
             let mut msg = String::new();
             let _ = writeln!(msg, #error);
@@ -139,7 +151,7 @@ impl MockMethod {
                 let _ = writeln!(msg, "- {}", ex);
 
                 /* type matches? */
-                if ex.args_type_id() != type_name::<#arg_types>() {
+                if ex.args_type_id() != type_name::<( #( #arg_types_prepared_static ),* )>() {
                     let _ = writeln!(msg, "    The type mismatched");
                     continue;
                 }
@@ -190,17 +202,14 @@ impl MockMethod {
                     }
                 }
 
-                let ret = if let Some(action) = &mut ex.action {
+                return if let Some(action) = &mut ex.action {
                     action.exec(args)
                 } else {
-                    drop(locked);
+                    let #arg_names_prepared = args;
+                    let ret = #default_action ( #default_args );
 
-                    let #args_name = args;
-
-                    #default_action(#default_args)
+                    #result
                 };
-
-                return #result;
             }
 
             println!("{}", msg);

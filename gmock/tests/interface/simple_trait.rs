@@ -1,4 +1,4 @@
-use gmock::{action::Return, expect_call, matcher::eq, mock};
+use gmock::{action::Return, expect_method_call, matcher::eq, mock};
 
 trait Fuu {
     fn fuu(&self, x: usize) -> usize;
@@ -33,7 +33,7 @@ fn success() {
 
     let service = Service::new(mock);
 
-    expect_call!(handle as Fuu, fuu(eq(4))).will_once(Return(4));
+    expect_method_call!(handle as Fuu, fuu(eq(4))).will_once(Return(4));
 
     assert_eq!(4, service.exec());
 }
@@ -45,7 +45,7 @@ fn failure() {
 
     let service = Service::new(mock);
 
-    expect_call!(handle as Fuu, fuu(_)).will_once(Return(4));
+    expect_method_call!(handle as Fuu, fuu(_)).will_once(Return(4));
 
     drop(service);
 }

@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use gmock::{expect_call, matcher::Closure, mock};
+use gmock::{expect_method_call, matcher::Closure, mock};
 
 pub struct Event<'a>(PhantomData<&'a ()>);
 
@@ -21,7 +21,7 @@ mock! {
 fn success() {
     let (handle, mock) = Handler::mock_with_handle();
 
-    expect_call!(handle as Fuu<Event<'a>>, fuu(Closure(|_: &Event<'_>| true)));
+    expect_method_call!(handle as Fuu<Event<'a>>, fuu(Closure(|_: &Event<'_>| true)));
 
     mock.fuu(Event(PhantomData));
 }

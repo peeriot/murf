@@ -97,8 +97,8 @@ impl ToTokens for Mock {
         tokens.extend(quote! {
             pub struct Mock #ga_mock_impl #ga_mock_where {
                 pub state: #ident_state #ga_state_types,
-                pub shared: Arc<Mutex<Shared #ga_mock_types>>,
-                pub handle: Option<Handle #ga_handle_types>
+                pub (super) shared: Arc<Mutex<Shared #ga_mock_types>>,
+                pub (super) handle: Option<Handle #ga_handle_types>
             }
 
             impl #ga_mock_impl Mock #ga_mock_types #ga_mock_where {

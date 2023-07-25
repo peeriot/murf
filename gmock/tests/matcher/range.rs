@@ -1,4 +1,4 @@
-use gmock::{expect_call, matcher::range, mock};
+use gmock::{expect_method_call, matcher::range, mock};
 
 trait Fuu {
     fn fuu(&self, x: usize);
@@ -17,7 +17,7 @@ mock! {
 fn success() {
     let mock = MyStructMock::default();
 
-    expect_call!(mock as Fuu, fuu(range(4..=6)));
+    expect_method_call!(mock as Fuu, fuu(range(4..=6)));
 
     mock.fuu(5);
 }
@@ -27,7 +27,7 @@ fn success() {
 fn failure() {
     let mock = MyStruct::mock();
 
-    expect_call!(mock as Fuu, fuu(range(4..=6)));
+    expect_method_call!(mock as Fuu, fuu(range(4..=6)));
 
     mock.fuu(7);
 }

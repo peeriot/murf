@@ -4,11 +4,11 @@ use std::sync::Arc;
 use convert_case::{Case, Casing};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use syn::{Generics, ImplItemFn, ItemImpl, PatType, Path, ReturnType, Type};
+use syn::{FnArg, Generics, ImplItemFn, ItemImpl, Pat, PatType, Path, ReturnType, Type};
 
 use crate::misc::{
-    format_expect_call, format_expect_module, format_expectations_field, GenericsEx, InputsEx,
-    ItemImplEx, MethodEx, ReturnTypeEx, TempLifetimes, TypeEx,
+    format_expect_call, format_expect_module, format_expectations_field, GenericsEx, ItemImplEx,
+    MethodEx, ReturnTypeEx, TempLifetimes, TypeEx,
 };
 
 use super::parsed::Parsed;
@@ -142,12 +142,7 @@ impl Deref for ImplContextData {
 pub struct MethodContext(Arc<MethodContextData>);
 
 impl MethodContext {
-    pub fn new(
-        context: ImplContext,
-        parsed: &Parsed,
-        impl_: &ItemImpl,
-        method: &ImplItemFn,
-    ) -> Self {
+    pub fn new(context: ImplContext, impl_: &ItemImpl, method: &ImplItemFn) -> Self {
         let is_associated = method.is_associated_fn();
 
         let (impl_, lts_temp) = impl_.clone().split_off_temp_lifetimes();
@@ -166,42 +161,52 @@ impl MethodContext {
             .remove_lifetimes(&lts_temp);
         let ga_method = context.ga_impl.clone().remove_other(&context.ga_state);
 
-        let args = method
-            .sig
-            .inputs
-            .without_self_arg()
-            .cloned()
-            .collect::<Vec<_>>();
+        let args = method.sig.inputs.iter().cloned().collect::<Vec<_>>();
         let ret = method.sig.output.clone();
 
-        let (_ga_state_impl, ga_state_types, _ga_state_where) = context.ga_state.split_for_impl();
+        let (_ga_mock_impl, ga_mock_types, _ga_mock_where) = context.ga_mock.split_for_impl();
 
-        let type_ = Type::from_ident(context.ident_state.clone());
-        let type_ = Type::Verbatim(quote!( #type_ #ga_state_types ));
+        let type_mock = Type::Verbatim(quote!( Mock #ga_mock_types ));
 
         let mut lts_mock = lts_temp.clone();
 
-        let args_with_lt = args
+        let args_prepared = args
             .iter()
-            .map(|i| match &*i.ty {
-                Type::Reference(t) => {
-                    let mut t = t.clone();
-                    t.lifetime = Some(lts_mock.generate());
+            .map(|arg| match arg {
+                FnArg::Receiver(t) => PatType {
+                    attrs: t.attrs.clone(),
+                    pat: Box::new(Pat::Verbatim(quote!(this))),
+                    colon_token: Default::default(),
+                    ty: Box::new(t.ty.clone().replace_self_type(&type_mock)),
+                },
+                FnArg::Typed(t) => PatType {
+                    attrs: t.attrs.clone(),
+                    pat: t.pat.clone(),
+                    colon_token: t.colon_token,
+                    ty: Box::new(t.ty.clone().replace_self_type(&type_mock)),
+                },
+            })
+            .collect::<Vec<_>>();
+        let args_prepared_lt = args_prepared
+            .iter()
+            .cloned()
+            .map(|mut t| {
+                t.ty = Box::new(t.ty.clone().replace_default_lifetime(&mut lts_mock));
 
-                    Type::Reference(t).replace_default_lifetime(&mut lts_mock)
-                }
-                t => t.clone().replace_default_lifetime(&mut lts_mock),
+                t
+            })
+            .collect::<Vec<_>>();
+        let args_prepared_static = args_prepared
+            .iter()
+            .cloned()
+            .map(|mut t| {
+                t.ty = Box::new(t.ty.make_static());
+
+                t
             })
             .collect();
 
-        let args_without_lt = args.iter().map(|i| i.ty.clone().make_static()).collect();
-
-        let args_without_self = args
-            .iter()
-            .map(|i| i.ty.clone().replace_self_type(&type_))
-            .collect::<Vec<_>>();
-
-        let return_type = ret.to_action_return_type(&parsed.ty);
+        let return_type = ret.to_action_return_type(&type_mock);
 
         let ident_method = method.sig.ident.clone();
         let ident_expect_method = format_expect_call(&ident_method, trait_.as_ref());
@@ -226,9 +231,9 @@ impl MethodContext {
             lts_temp,
             lts_mock,
 
-            args_with_lt,
-            args_without_lt,
-            args_without_self,
+            args_prepared,
+            args_prepared_lt,
+            args_prepared_static,
             return_type,
 
             ident_method,
@@ -259,15 +264,15 @@ pub struct MethodContextData {
     pub ga_expectation: Generics,
     pub ga_expectation_builder: Generics,
 
-    pub args: Vec<PatType>,
+    pub args: Vec<FnArg>,
     pub ret: ReturnType,
 
     pub lts_temp: TempLifetimes,
     pub lts_mock: TempLifetimes,
 
-    pub args_with_lt: Vec<Type>,
-    pub args_without_lt: Vec<Type>,
-    pub args_without_self: Vec<Type>,
+    pub args_prepared: Vec<PatType>,
+    pub args_prepared_lt: Vec<PatType>,
+    pub args_prepared_static: Vec<PatType>,
     pub return_type: Type,
 
     pub ident_method: Ident,

@@ -114,6 +114,18 @@ impl TypeEx for Type {
         }
 
         impl<'a> TypeVisitor for Visitor<'a> {
+            fn visit_type(&mut self, ty: &UnsafeCell<Type>) -> bool {
+                let ty = unsafe { &mut *ty.get() };
+
+                if let Type::Reference(r) = ty {
+                    if r.lifetime.is_none() {
+                        r.lifetime = Some(self.lts.generate());
+                    }
+                }
+
+                true
+            }
+
             fn visit_lifetime(&mut self, lt: &UnsafeCell<Lifetime>) -> bool {
                 let lt = unsafe { &mut *lt.get() };
 

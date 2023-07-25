@@ -35,7 +35,7 @@ impl Expectation {
         let default_matcher = format!(
             "({})",
             context
-                .args_without_self
+                .args_prepared
                 .iter()
                 .map(|_| "_")
                 .collect::<Vec<_>>()
@@ -67,9 +67,9 @@ impl ToTokens for Expectation {
             lts_temp: TempLifetimes(lts_temp),
             lts_mock: TempLifetimes(lts_mock),
 
-            args_with_lt,
-            args_without_lt,
-            args_without_self,
+            args_prepared,
+            args_prepared_lt,
+            args_prepared_static,
             return_type,
             ..
         } = &**context;
@@ -97,16 +97,23 @@ impl ToTokens for Expectation {
             quote!(+ 'mock)
         };
 
+        let arg_types_prepared = args_prepared.iter().map(|t| &t.ty).collect::<Vec<_>>();
+        let arg_types_prepared_lt = args_prepared_lt.iter().map(|t| &t.ty).collect::<Vec<_>>();
+        let arg_types_prepared_static = args_prepared_static
+            .iter()
+            .map(|t| &t.ty)
+            .collect::<Vec<_>>();
+
         let ga_expectation_phantom = ga_expectation.make_phantom_data();
         let (ga_expectation_impl, ga_expectation_types, ga_expectation_where) =
             ga_expectation.split_for_impl();
 
         tokens.extend(quote! {
-            pub struct Expectation #ga_expectation_types #ga_expectation_where {
+            pub struct Expectation #ga_expectation_impl #ga_expectation_where {
                 pub times: Times,
                 pub description: Option<String>,
-                pub action: Option<Box<dyn #lts_mock RepeatableAction<( #( #args_with_lt ),* ), #return_type> #trait_send #trait_sync #lt>>,
-                pub matcher: Option<Box<dyn #lts_mock Matcher<( #( #args_with_lt ),* )> #trait_send #trait_sync #lt>>,
+                pub action: Option<Box<dyn #lts_mock RepeatableAction<( #( #arg_types_prepared_lt ),* ), #return_type> #trait_send #trait_sync #lt>>,
+                pub matcher: Option<Box<dyn #lts_mock Matcher<( #( #arg_types_prepared_lt ),* )> #trait_send #trait_sync #lt>>,
                 pub sequences: Vec<SequenceHandle>,
                 _marker: #ga_expectation_phantom,
             }
@@ -125,7 +132,7 @@ impl ToTokens for Expectation {
             }
 
             impl #ga_expectation_impl Expectation #ga_expectation_types #ga_expectation_where {
-                pub fn matches #lts_temp (&self, args: &( #( #args_without_self ),* )) -> bool {
+                pub fn matches #lts_temp (&self, args: &( #( #arg_types_prepared ),* )) -> bool {
                     if let Some(m) = &self.matcher {
                         m.matches(args)
                     } else {
@@ -146,7 +153,7 @@ impl ToTokens for Expectation {
                 }
 
                 fn args_type_id(&self) -> &'static str {
-                    type_name::<( #( #args_without_lt ),* )>()
+                    type_name::<( #( #arg_types_prepared_static ),* )>()
                 }
             }
 

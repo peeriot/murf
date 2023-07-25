@@ -68,7 +68,6 @@ impl ToTokens for ExpectationModule {
                     Matcher, Times, TimesRange, Sequence, SequenceHandle, InSequence,
                     action::{Action, RepeatableAction, OnetimeAction, RepeatedAction},
                 };
-                use parking_lot::MappedMutexGuard;
 
                 use super::*;
 

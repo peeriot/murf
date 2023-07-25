@@ -3,7 +3,7 @@ use std::task::{Context, Poll};
 
 use futures::task::noop_waker_ref;
 use futures::Stream;
-use gmock::{action::Return, expect_call, mock};
+use gmock::{action::Return, expect_method_call, mock};
 
 mock! {
     #[derive(Default)]
@@ -23,7 +23,7 @@ mock! {
 fn success() {
     let (handle, mut mock) = MyStruct::mock_with_handle();
 
-    expect_call!(handle as Stream, poll_next(_)).will_once(Return(Poll::Ready(None)));
+    expect_method_call!(handle as Stream, poll_next(_)).will_once(Return(Poll::Ready(None)));
 
     let mut cx = Context::from_waker(noop_waker_ref());
     assert_eq!(Poll::Ready(None), Pin::new(&mut mock).poll_next(&mut cx));

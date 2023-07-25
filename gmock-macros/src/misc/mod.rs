@@ -1,6 +1,5 @@
 mod formatted_string;
 mod generics_ex;
-mod inputs_ex;
 mod item_impl_ex;
 mod method_ex;
 mod return_type_ex;
@@ -14,7 +13,6 @@ use syn::Path;
 
 pub use formatted_string::FormattedString;
 pub use generics_ex::GenericsEx;
-pub use inputs_ex::InputsEx;
 pub use item_impl_ex::ItemImplEx;
 pub use method_ex::MethodEx;
 pub use return_type_ex::ReturnTypeEx;
