@@ -96,7 +96,7 @@ impl ToTokens for Call {
         };
 
         tokens.extend(quote! {
-            #obj.#method().description(#desc)#args
+            #obj.mock_handle().#method().description(#desc)#args
         });
 
         #[cfg(feature = "debug")]

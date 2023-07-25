@@ -15,7 +15,7 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     expect_call!(handle as Fuu, fuu()).times(1);
     mock.fuu();

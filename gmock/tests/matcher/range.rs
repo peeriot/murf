@@ -15,9 +15,9 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, mock) = MyStruct::mock();
+    let mock = MyStruct::mock();
 
-    expect_call!(handle as Fuu, fuu(range(4..=6)));
+    expect_call!(mock as Fuu, fuu(range(4..=6)));
 
     mock.fuu(5);
 }
@@ -25,9 +25,9 @@ fn success() {
 #[test]
 #[should_panic]
 fn failure() {
-    let (handle, mock) = MyStruct::mock();
+    let mock = MyStruct::mock();
 
-    expect_call!(handle as Fuu, fuu(range(4..=6)));
+    expect_call!(mock as Fuu, fuu(range(4..=6)));
 
     mock.fuu(7);
 }

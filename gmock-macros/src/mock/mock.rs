@@ -40,12 +40,14 @@ impl ToTokens for Mock {
             ident_state,
             ga_state,
             ga_mock,
+            ga_handle,
             derive_clone,
             ..
         } = &**context;
 
         let (ga_mock_impl, ga_mock_types, ga_mock_where) = ga_mock.split_for_impl();
         let (_ga_state_impl, ga_state_types, _ga_state_where) = ga_state.split_for_impl();
+        let (_ga_handle_impl, ga_handle_types, _ga_handle_where) = ga_handle.split_for_impl();
 
         let mock_default_clone_impl = derive_clone.then(|| {
             quote! {
@@ -54,6 +56,7 @@ impl ToTokens for Mock {
                         Self {
                             state: self.state.clone(),
                             shared: self.shared.clone(),
+                            handle: self.handle.clone(),
                         }
                     }
                 }
@@ -78,6 +81,35 @@ impl ToTokens for Mock {
             pub struct Mock #ga_mock_impl #ga_mock_where {
                 pub state: #ident_state #ga_state_types,
                 pub shared: Arc<Mutex<Shared #ga_mock_types>>,
+                pub handle: Option<Handle #ga_handle_types>
+            }
+
+            impl #ga_mock_impl Mock #ga_mock_types #ga_mock_where {
+                pub fn mock_handle(&self) -> &Handle #ga_handle_types {
+                    if let Some(handle) = &self.handle {
+                        handle
+                    } else {
+                        panic!("The handle of this mock object was already taken!");
+                    }
+                }
+
+                pub fn mock_split(mut self) -> (Handle #ga_handle_types, Self) {
+                    let handle = self.mock_take_handle();
+
+                    (handle, self)
+                }
+
+                pub fn mock_take_handle(&mut self) -> Handle #ga_handle_types {
+                    if let Some(handle) = self.handle.take() {
+                        handle
+                    } else {
+                        panic!("The handle of this mock object was already taken!");
+                    }
+                }
+
+                pub fn mock_release_handle(&mut self) {
+                    self.mock_take_handle().release();
+                }
             }
 
             #mock_default_clone_impl

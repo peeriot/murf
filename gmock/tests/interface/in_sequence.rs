@@ -15,7 +15,7 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     let _seq = InSequence::default();
     expect_call!(handle as Fuu, fuu(eq(1)));
@@ -27,7 +27,7 @@ fn success() {
 
 #[test]
 fn remove_sequences() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     let _seq = InSequence::default();
     expect_call!(handle as Fuu, fuu(eq(1)));
@@ -43,7 +43,7 @@ fn remove_sequences() {
 #[test]
 #[should_panic]
 fn failure() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     let _seq = InSequence::default();
     expect_call!(handle as Fuu, fuu(eq(1)));

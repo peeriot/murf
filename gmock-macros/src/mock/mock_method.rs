@@ -98,11 +98,13 @@ impl MockMethod {
                 Type::Reference(r) if r.elem.to_formatted_string() == "Self" => quote!(&self),
                 t if t.to_formatted_string() == "Self" => quote!(Self {
                     state: ret,
-                    shared: self.shared.clone()
+                    shared: self.shared.clone(),
+                    handle: self.handle.clone(),
                 }),
                 t if t.to_formatted_string() == "Box<Self>" => quote!(Box<Self {
                     state: ret,
-                    shared: self.shared.clone()
+                    shared: self.shared.clone(),
+                    handle: self.handle.clone(),
                 }>),
                 t if t.contains_self_type() => quote!(Self::from_state(ret, self.shared.clone())),
                 _ => quote!(ret),

@@ -19,7 +19,7 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, mock) = Handler::mock();
+    let (handle, mock) = Handler::mock_with_handle();
 
     expect_call!(handle as Fuu<Event<'a>>, fuu(Closure(|_: &Event<'_>| true)));
 

@@ -18,7 +18,7 @@ fn success() {
     let mut i = 5;
     let i_ref = &mut i;
 
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     expect_call!(handle as Fuu, fuu(_)).will_once(move |x| {
         assert_eq!(x, 5);

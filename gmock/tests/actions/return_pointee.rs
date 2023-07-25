@@ -19,7 +19,7 @@ mock! {
 fn success() {
     let val = Rc::new(RefCell::new(5usize));
 
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     expect_call!(handle as Fuu, fuu()).will_once(ReturnPointee(val.clone()));
     expect_call!(handle as Fuu, fuu()).will_once(ReturnPointee(val.clone()));

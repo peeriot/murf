@@ -21,7 +21,7 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, mut mock) = MyStruct::mock();
+    let (handle, mut mock) = MyStruct::mock_with_handle();
 
     expect_call!(handle as Stream, poll_next(_)).will_once(Return(Poll::Ready(None)));
 

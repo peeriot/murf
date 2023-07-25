@@ -27,7 +27,7 @@ impl<T: Iterator> NewIterator<T> {
 
 #[test]
 fn success() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     let mut iter = NewIterator::new(mock);
 

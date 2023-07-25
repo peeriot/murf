@@ -16,7 +16,7 @@ mock! {
 #[test]
 fn success() {
     let seq = Sequence::default();
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     expect_call!(handle as Fuu, fuu(eq(1))).in_sequence(&seq);
     expect_call!(handle as Fuu, fuu(eq(2))).in_sequence(&seq);
@@ -29,7 +29,7 @@ fn success() {
 #[should_panic]
 fn failure() {
     let seq = Sequence::default();
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     expect_call!(handle as Fuu, fuu(eq(1))).in_sequence(&seq);
     expect_call!(handle as Fuu, fuu(eq(2))).in_sequence(&seq);
@@ -43,7 +43,7 @@ fn multi_sequence() {
     let seq0 = Sequence::default();
     let seq1 = Sequence::default();
 
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     expect_call!(handle as Fuu, fuu(eq(1))).add_sequence(&seq0);
     expect_call!(handle as Fuu, fuu(eq(2))).add_sequence(&seq1);

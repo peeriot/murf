@@ -29,7 +29,7 @@ impl<T: Fuu> Service<T> {
 
 #[test]
 fn success() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     let service = Service::new(mock);
 
@@ -41,7 +41,7 @@ fn success() {
 #[test]
 #[should_panic]
 fn failure() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     let service = Service::new(mock);
 

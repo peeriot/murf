@@ -15,7 +15,7 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, mock1) = MyStruct::mock();
+    let (handle, mock1) = MyStruct::mock_with_handle();
 
     let _seq = InSequence::default();
     expect_call!(handle as Fuu, fuu(Eq(1))).times(1);

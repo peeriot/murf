@@ -21,7 +21,7 @@ impl WakeableMock<'static> {
 
 #[test]
 fn success() {
-    let (wake_handle, wake_mock) = Wakeable::mock();
+    let (wake_handle, wake_mock) = Wakeable::mock_with_handle();
     let waker = wake_mock.into_waker();
 
     expect_call!(wake_handle as Wake, wake_by_ref());

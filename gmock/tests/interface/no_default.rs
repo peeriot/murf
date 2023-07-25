@@ -20,7 +20,7 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, mut mock) = MyStruct(PhantomData::<usize>).into_mock();
+    let (handle, mut mock) = MyStruct(PhantomData::<usize>).into_mock().mock_split();
 
     expect_call!(handle as Stream, poll_next(_)).will_once(Return(Poll::Ready(None)));
 

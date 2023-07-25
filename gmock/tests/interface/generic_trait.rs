@@ -28,7 +28,7 @@ mock! {
 fn success() {
     let fuu = 123usize;
     let fuu = Wrapper(&fuu);
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     expect_call!(handle as Fuu<T>, fuu(eq(fuu)));
 
