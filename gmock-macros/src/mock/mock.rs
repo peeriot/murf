@@ -103,11 +103,8 @@ impl ToTokens for Mock {
 
             impl #ga_mock_impl Mock #ga_mock_types #ga_mock_where {
                 pub fn from_state(state: #ident_state #ga_state_types) -> Self {
-                    let shared = Arc::new(Mutex::new(Shared::default()));
-                    let handle = Handle {
-                        shared: shared.clone(),
-                        check_on_drop: true,
-                    };
+                    let handle = Handle::new();
+                    let shared = handle.shared.clone();
                     let mock = Self {
                         state,
                         shared,

@@ -98,12 +98,27 @@ impl ToTokens for Handle {
                 #( #methods )*
             }
 
+            impl #ga_handle_impl Handle #ga_handle_types #ga_handle_where {
+                pub fn new() -> Self {
+                    Self {
+                        shared: Default::default(),
+                        check_on_drop: true,
+                    }
+                }
+            }
+
             impl #ga_handle_impl Clone for Handle #ga_handle_types #ga_handle_where {
                 fn clone(&self) -> Self {
                     Self {
                         shared: self.shared.clone(),
                         check_on_drop: self.check_on_drop,
                     }
+                }
+            }
+
+            impl #ga_handle_impl Default for Handle #ga_handle_types #ga_handle_where {
+                fn default() -> Self {
+                    Self::new()
                 }
             }
 
