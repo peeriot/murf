@@ -7,15 +7,20 @@ impl ToTokens for MockableDefault {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.extend(quote! {
             pub trait MockableDefault: Mockable {
-                fn mock<'mock>() -> (Self::Handle<'mock>, Self::Mock<'mock>);
+                fn mock<'mock>() -> Self::Mock<'mock>;
+                fn mock_with_handle<'mock>() -> (Self::Handle<'mock>, Self::Mock<'mock>);
             }
 
             impl<X> MockableDefault for X
             where
                 X: Mockable + Default,
             {
-                fn mock<'mock>() -> (Self::Handle<'mock>, Self::Mock<'mock>) {
+                fn mock<'mock>() -> Self::Mock<'mock> {
                     Self::default().into_mock()
+                }
+
+                fn mock_with_handle<'mock>() -> (Self::Handle<'mock>, Self::Mock<'mock>) {
+                    Self::default().into_mock_with_handle()
                 }
             }
         })

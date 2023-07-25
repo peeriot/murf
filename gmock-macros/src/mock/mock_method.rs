@@ -1,7 +1,7 @@
 use quote::{quote, ToTokens};
-use syn::{FnArg, ImplItemFn, Item, ReturnType, Stmt, Type};
+use syn::{FnArg, ImplItemFn, Item, PatType, ReturnType, Stmt, Type};
 
-use crate::misc::{FormattedString, TypeEx};
+use crate::misc::{FormattedString, IterEx, TypeEx};
 
 use super::context::{MethodContext, MethodContextData};
 
@@ -17,21 +17,31 @@ impl MockMethod {
             ident_expectation_module,
             ident_expectation_field,
             args,
+            ret,
+            args_prepared,
             ..
         } = &**context;
 
         let locked = if *is_associated {
             quote! {
-                let mut locked = #ident_expectation_module::EXPECTATIONS.lock();
+                let locked = #ident_expectation_module::EXPECTATIONS.lock();
             }
         } else {
             quote! {
-                let mut locked = self.shared.lock();
+                let shared = self.shared.clone();
+                let mut locked = shared.lock();
             }
         };
 
         let expectations_iter = if *is_associated {
-            quote!(&mut *locked)
+            quote! {
+                gmock::LocalContext::current()
+                    .borrow()
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|x| x.expectations(*#ident_expectation_module::TYPE_ID))
+                    .chain(&*locked)
+            }
         } else {
             quote!(&mut locked.#ident_expectation_field)
         };
@@ -47,37 +57,40 @@ impl MockMethod {
             }
         });
 
-        let self_ty = &impl_.self_ty;
         let (_ga_expectation_impl, ga_expectation_types, _ga_expectation_where) =
             ga_expectation.split_for_impl();
 
-        let args_name = args.iter().map(|i| &i.pat);
-        let args_name = quote! { ( #( #args_name ),* ) };
+        let arg_names = args
+            .iter()
+            .map(|arg| match arg {
+                FnArg::Receiver(_) => quote!(self),
+                FnArg::Typed(PatType { pat, .. }) => quote!( #pat ),
+            })
+            .parenthesis();
 
-        let arg_types = args.iter().map(|i| &i.ty);
-        let arg_types = quote! { ( #( #arg_types ),* ) };
+        let arg_names_prepared = args_prepared.iter().map(|arg| &arg.pat).parenthesis();
 
         let default_args = method.sig.inputs.iter().map(|i| match i {
             FnArg::Receiver(r) if r.ty.to_formatted_string() == "Pin<&mut Self>" => {
-                quote!(unsafe { std::pin::Pin::new_unchecked(&mut self.get_unchecked_mut().state) })
+                quote!(unsafe { std::pin::Pin::new_unchecked(&mut this.get_unchecked_mut().state) })
             }
             FnArg::Receiver(r) if r.ty.to_formatted_string() == "Arc<Self>" => {
-                quote!(Arc::new(self.state.clone()))
+                quote!(Arc::new(this.state.clone()))
             }
             FnArg::Receiver(r) if r.ty.to_formatted_string() == "&Arc<Self>" => {
-                quote!(&Arc::new(self.state.clone()))
+                quote!(&Arc::new(this.state.clone()))
             }
             FnArg::Receiver(r) if r.reference.is_some() && r.mutability.is_some() => {
-                quote!(&mut self.state)
+                quote!(&mut this.state)
             }
-            FnArg::Receiver(r) if r.reference.is_some() => quote!(&self.state),
-            FnArg::Receiver(_) => quote!(self.state),
+            FnArg::Receiver(r) if r.reference.is_some() => quote!(&this.state),
+            FnArg::Receiver(_) => quote!(this.state),
             FnArg::Typed(t) => t.pat.to_token_stream(),
         });
-        let default_args = quote!( #( #default_args ),* );
 
         let default_action = if let Some(t) = trait_ {
             let method = &method.sig.ident;
+            let self_ty = &impl_.self_ty;
 
             quote!(<#self_ty as #t>::#method)
         } else {
@@ -87,24 +100,33 @@ impl MockMethod {
             quote!(#t::#method)
         };
 
-        let result = match &method.sig.output {
+        let result = match ret {
             ReturnType::Default => quote!(ret),
             ReturnType::Type(_, t) => match &**t {
                 Type::Reference(r)
                     if r.mutability.is_some() && r.elem.to_formatted_string() == "Self" =>
                 {
-                    quote!(&mut self)
+                    quote!(&mut this)
                 }
-                Type::Reference(r) if r.elem.to_formatted_string() == "Self" => quote!(&self),
+                Type::Reference(r) if r.elem.to_formatted_string() == "Self" => quote!(&this),
                 t if t.to_formatted_string() == "Self" => quote!(Self {
                     state: ret,
-                    shared: self.shared.clone()
+                    shared: this.shared.clone(),
+                    handle: this.handle.clone(),
                 }),
                 t if t.to_formatted_string() == "Box<Self>" => quote!(Box<Self {
                     state: ret,
-                    shared: self.shared.clone()
+                    shared: this.shared.clone(),
+                    handle: this.handle.clone(),
                 }>),
-                t if t.contains_self_type() => quote!(Self::from_state(ret, self.shared.clone())),
+                t if t.contains_self_type() => {
+                    let s = format!(
+                        "No default conversion for `{}` or expectation {{}}",
+                        t.to_formatted_string()
+                    );
+
+                    quote!(panic!(#s, ex))
+                }
                 _ => quote!(ret),
             },
         };
@@ -125,7 +147,7 @@ impl MockMethod {
 
         method.block.stmts = vec![Stmt::Item(Item::Verbatim(quote! {
             #locked
-            let args = #args_name;
+            let args = #arg_names;
 
             let mut msg = String::new();
             let _ = writeln!(msg, #error);
@@ -137,21 +159,17 @@ impl MockMethod {
                 let _ = writeln!(msg, "- {}", ex);
 
                 /* type matches? */
-                if ex.args_type_id() != type_name::<#arg_types>() {
-                    let _ = writeln!(msg, "    The type mismatched");
-                    continue;
-                }
-                let _ = writeln!(msg, "    The type matched");
+                assert_eq!(ex.type_id(), *#ident_expectation_module::TYPE_ID);
 
                 let ex: &mut dyn gmock::Expectation = &mut **ex;
                 let ex = unsafe { &mut *(ex as *mut dyn gmock::Expectation as *mut #ident_expectation_module::Expectation #ga_expectation_types) };
 
                 /* value matches? */
                 if !ex.matches(&args) {
-                    let _ = writeln!(msg, "    but the value mismatched");
+                    let _ = writeln!(msg, "    The value mismatched");
                     continue;
                 }
-                let _ = writeln!(msg, "    and the value matched");
+                let _ = writeln!(msg, "    The value matched");
 
                 /* is done? */
                 let all_sequences_done = !ex.sequences.is_empty() && ex.sequences.iter().all(|s| s.is_done());
@@ -188,17 +206,14 @@ impl MockMethod {
                     }
                 }
 
-                let ret = if let Some(action) = &mut ex.action {
+                return if let Some(action) = &mut ex.action {
                     action.exec(args)
                 } else {
-                    drop(locked);
+                    let #arg_names_prepared = args;
+                    let ret = #default_action ( #( #default_args ),* );
 
-                    let #args_name = args;
-
-                    #default_action(#default_args)
+                    #result
                 };
-
-                return #result;
             }
 
             println!("{}", msg);

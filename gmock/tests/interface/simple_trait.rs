@@ -1,4 +1,4 @@
-use gmock::{action::Return, expect_call, matcher::eq, mock};
+use gmock::{action::Return, expect_method_call, matcher::eq, mock};
 
 trait Fuu {
     fn fuu(&self, x: usize) -> usize;
@@ -29,11 +29,11 @@ impl<T: Fuu> Service<T> {
 
 #[test]
 fn success() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     let service = Service::new(mock);
 
-    expect_call!(handle as Fuu, fuu(eq(4))).will_once(Return(4));
+    expect_method_call!(handle as Fuu, fuu(eq(4))).will_once(Return(4));
 
     assert_eq!(4, service.exec());
 }
@@ -41,11 +41,11 @@ fn success() {
 #[test]
 #[should_panic]
 fn failure() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     let service = Service::new(mock);
 
-    expect_call!(handle as Fuu, fuu(_)).will_once(Return(4));
+    expect_method_call!(handle as Fuu, fuu(_)).will_once(Return(4));
 
     drop(service);
 }

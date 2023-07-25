@@ -1,4 +1,4 @@
-use gmock::{expect_call, mock};
+use gmock::{expect_method_call, mock};
 
 trait Fuu {
     fn fuu(&self, x: usize) -> &mut usize;
@@ -18,9 +18,9 @@ fn success() {
     let mut i = 5;
     let i_ref = &mut i;
 
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
-    expect_call!(handle as Fuu, fuu(_)).will_once(move |x| {
+    expect_method_call!(handle as Fuu, fuu(_)).will_once(move |(_, x): (&_, usize)| {
         assert_eq!(x, 5);
 
         *i_ref = x;

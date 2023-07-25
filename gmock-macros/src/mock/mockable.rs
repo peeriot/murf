@@ -32,27 +32,23 @@ impl ToTokens for Mockable {
 
         tokens.extend(quote! {
             pub trait Mockable {
-                type Handle<'mock>;
                 type Mock<'mock>;
+                type Handle<'mock>;
 
-                fn into_mock<'mock>(self) -> (Self::Handle<'mock>, Self::Mock<'mock>);
+                fn into_mock<'mock>(self) -> Self::Mock<'mock>;
+                fn into_mock_with_handle<'mock>(self) -> (Self::Handle<'mock>, Self::Mock<'mock>);
             }
 
             impl #ga_state_impl Mockable for #ident_state #ga_state_types #ga_state_where {
-                type Handle<'mock> = #ident_module::Handle #ga_handle_types;
                 type Mock<'mock> = #ident_module::Mock #ga_mock_types;
+                type Handle<'mock> = #ident_module::Handle #ga_handle_types;
 
-                fn into_mock<'mock>(self) -> (Self::Handle<'mock>, Self::Mock<'mock>) {
-                    let shared = Arc::new(Mutex::new(#ident_module::Shared::default()));
-                    let handle = #ident_module::Handle {
-                        shared: shared.clone()
-                    };
-                    let mock = #ident_module::Mock {
-                        state: self,
-                        shared,
-                    };
+                fn into_mock<'mock>(self) -> Self::Mock<'mock> {
+                    Self::Mock::from_state(self)
+                }
 
-                    (handle, mock)
+                fn into_mock_with_handle<'mock>(self) -> (Self::Handle<'mock>, Self::Mock<'mock>) {
+                    self.into_mock().mock_split()
                 }
             }
         })

@@ -66,7 +66,7 @@ impl MockModule {
             .map(|item| self.generate_item(context.clone(), parsed, impl_, item))
             .collect();
 
-        self.mock.add_impl(impl_, items);
+        self.mock.add_impl(context, items);
     }
 
     fn generate_item(
@@ -89,7 +89,7 @@ impl MockModule {
         impl_: &ItemImpl,
         method: &ImplItemFn,
     ) -> ImplItemFn {
-        let context = MethodContext::new(context, parsed, impl_, method);
+        let context = MethodContext::new(context, impl_, method);
 
         let ret = MockMethod::render(&context, method.clone());
 

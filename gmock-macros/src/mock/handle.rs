@@ -14,7 +14,7 @@ pub struct Handle {
 
 impl Handle {
     pub fn new(context: Context) -> Self {
-        let ga_handle_extra = context.ga_handle.clone().add_lifetime_clauses("'mock");
+        let ga_handle_extra = context.ga_handle.clone().add_lifetime_bounds("'mock");
 
         Self {
             context,
@@ -75,11 +75,22 @@ impl ToTokens for Handle {
         tokens.extend(quote! {
             pub struct Handle #ga_handle_impl #ga_handle_where {
                 pub shared: Arc<Mutex<Shared #ga_handle_types>>,
+                pub check_on_drop: bool,
             }
 
             impl #ga_handle_impl Handle #ga_handle_types #ga_handle_where {
                 pub fn checkpoint(&self) {
                     self.shared.lock().checkpoint();
+                }
+
+                pub fn mock_handle(&self) -> &Self {
+                    self
+                }
+
+                pub fn release(mut self) {
+                    self.check_on_drop = false;
+
+                    drop(self);
                 }
             }
 
@@ -87,9 +98,33 @@ impl ToTokens for Handle {
                 #( #methods )*
             }
 
+            impl #ga_handle_impl Handle #ga_handle_types #ga_handle_where {
+                pub fn new() -> Self {
+                    Self {
+                        shared: Default::default(),
+                        check_on_drop: true,
+                    }
+                }
+            }
+
+            impl #ga_handle_impl Clone for Handle #ga_handle_types #ga_handle_where {
+                fn clone(&self) -> Self {
+                    Self {
+                        shared: self.shared.clone(),
+                        check_on_drop: self.check_on_drop,
+                    }
+                }
+            }
+
+            impl #ga_handle_impl Default for Handle #ga_handle_types #ga_handle_where {
+                fn default() -> Self {
+                    Self::new()
+                }
+            }
+
             impl #ga_handle_impl Drop for Handle #ga_handle_types #ga_handle_where {
                 fn drop(&mut self) {
-                    if !::std::thread::panicking() {
+                    if self.check_on_drop && !::std::thread::panicking() {
                         self.shared.lock().checkpoint();
                     }
                 }

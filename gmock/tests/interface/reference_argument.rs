@@ -1,4 +1,4 @@
-use gmock::{action::Return, expect_call, matcher::eq, mock};
+use gmock::{action::Return, expect_method_call, matcher::eq, mock};
 
 trait Fuu {
     fn fuu(&self, x: &usize) -> &usize;
@@ -15,9 +15,9 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
-    expect_call!(handle as Fuu, fuu(eq(&6))).will_once(Return(&4));
+    expect_method_call!(handle as Fuu, fuu(eq(&6))).will_once(Return(&4));
 
     assert_eq!(&4, mock.fuu(&6));
 }

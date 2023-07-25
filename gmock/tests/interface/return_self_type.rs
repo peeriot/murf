@@ -1,4 +1,4 @@
-use gmock::{expect_call, mock};
+use gmock::{expect_method_call, mock};
 
 #[derive(Default, Clone)]
 pub struct MyStruct;
@@ -11,9 +11,9 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
-    expect_call!(handle as Clone, clone());
+    expect_method_call!(handle as Clone, clone());
 
     let _ = mock.clone();
 }

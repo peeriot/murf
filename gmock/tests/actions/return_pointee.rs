@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use gmock::{action::ReturnPointee, expect_call, mock};
+use gmock::{action::ReturnPointee, expect_method_call, mock};
 
 trait Fuu {
     fn fuu(&self) -> usize;
@@ -19,10 +19,10 @@ mock! {
 fn success() {
     let val = Rc::new(RefCell::new(5usize));
 
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
-    expect_call!(handle as Fuu, fuu()).will_once(ReturnPointee(val.clone()));
-    expect_call!(handle as Fuu, fuu()).will_once(ReturnPointee(val.clone()));
+    expect_method_call!(handle as Fuu, fuu()).will_once(ReturnPointee(val.clone()));
+    expect_method_call!(handle as Fuu, fuu()).will_once(ReturnPointee(val.clone()));
 
     assert_eq!(5, mock.fuu());
 

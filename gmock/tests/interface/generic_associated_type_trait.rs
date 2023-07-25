@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use gmock::{action::Return, expect_call, mock};
+use gmock::{action::Return, expect_method_call, mock};
 
 mock! {
     #[derive(Default)]
@@ -35,11 +35,11 @@ impl<T: Iterator> NewIterator<T> {
 
 #[test]
 fn success() {
-    let (handle, mock) = MyStruct::<usize>::mock();
+    let (handle, mock) = MyStruct::<usize>::mock_with_handle();
 
     let mut iter = NewIterator::new(mock);
 
-    expect_call!(handle as Iterator, next()).will_once(Return(Some(&2)));
+    expect_method_call!(handle as Iterator, next()).will_once(Return(Some(&2)));
 
     assert_eq!(Some(&2), iter.next());
 }

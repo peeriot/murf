@@ -2,13 +2,15 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use convert_case::{Case, Casing};
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{Generics, ImplItemFn, ItemImpl, PatType, Path, ReturnType, Type};
+use syn::{
+    FnArg, Generics, ImplItem, ImplItemFn, ItemImpl, Lifetime, Pat, PatType, Path, ReturnType, Type,
+};
 
 use crate::misc::{
-    format_expect_call, format_expect_module, format_expectations_field, GenericsEx, InputsEx,
-    ItemImplEx, MethodEx, ReturnTypeEx, TempLifetimes, TypeEx,
+    format_expect_call, format_expect_module, format_expectations_field, GenericsEx, ItemImplEx,
+    MethodEx, ReturnTypeEx, TempLifetimes, TypeEx,
 };
 
 use super::parsed::Parsed;
@@ -31,6 +33,7 @@ pub struct ContextData {
     pub derive_send: bool,
     pub derive_sync: bool,
     pub derive_clone: bool,
+    pub derive_default: bool,
 
     pub trait_send: Option<TokenStream>,
     pub trait_sync: Option<TokenStream>,
@@ -54,6 +57,7 @@ impl Context {
         let derive_send = parsed.derive_send;
         let derive_sync = parsed.derive_sync;
         let derive_clone = parsed.ty.derives("Clone");
+        let derive_default = parsed.ty.derives("Default");
 
         let trait_send = derive_send.then(|| quote!(+ Send));
         let trait_sync = derive_sync.then(|| quote!(+ Sync));
@@ -71,6 +75,7 @@ impl Context {
             derive_send,
             derive_sync,
             derive_clone,
+            derive_default,
 
             trait_send,
             trait_sync,
@@ -93,17 +98,41 @@ pub struct ImplContext(Arc<ImplContextData>);
 
 impl ImplContext {
     pub fn new(context: Context, impl_: &ItemImpl) -> Self {
+        let ga_impl = impl_.generics.clone();
         let (impl_, lts_temp) = impl_.clone().split_off_temp_lifetimes();
 
-        let ga_impl = impl_.generics.clone();
+        let need_static_lt = impl_.items.iter().any(|i| {
+            if let ImplItem::Fn(f) = i {
+                f.is_associated_fn()
+                    && matches!(&f.sig.output, ReturnType::Type(_, t) if t.contains_self_type())
+            } else {
+                false
+            }
+        });
+
+        let mut ga_impl_mock = ga_impl.clone().add_lifetime("'mock");
+        if need_static_lt {
+            ga_impl_mock
+                .get_lifetime_mut("'mock")
+                .unwrap()
+                .bounds
+                .push(Lifetime::new("'static", Span::call_site()));
+        }
+
+        let trait_ = impl_.trait_.as_ref().map(|(_, p, _)| p).cloned();
 
         Self(Arc::new(ImplContextData {
             context,
 
+            need_static_lt,
+
             impl_,
+            trait_,
+
             lts_temp,
 
             ga_impl,
+            ga_impl_mock,
         }))
     }
 }
@@ -119,10 +148,15 @@ impl Deref for ImplContext {
 pub struct ImplContextData {
     pub context: Context,
 
+    pub need_static_lt: bool,
+
     pub impl_: ItemImpl,
+    pub trait_: Option<Path>,
+
     pub lts_temp: TempLifetimes,
 
     pub ga_impl: Generics,
+    pub ga_impl_mock: Generics,
 }
 
 impl Deref for ImplContextData {
@@ -139,71 +173,90 @@ impl Deref for ImplContextData {
 pub struct MethodContext(Arc<MethodContextData>);
 
 impl MethodContext {
-    pub fn new(
-        context: ImplContext,
-        parsed: &Parsed,
-        impl_: &ItemImpl,
-        method: &ImplItemFn,
-    ) -> Self {
+    pub fn new(context: ImplContext, impl_: &ItemImpl, method: &ImplItemFn) -> Self {
         let is_associated = method.is_associated_fn();
 
         let (impl_, lts_temp) = impl_.clone().split_off_temp_lifetimes();
         let trait_ = impl_.trait_.as_ref().map(|(_, x, _)| x).cloned();
 
-        let ga_impl_mock = context.ga_impl.clone().add_lifetime("'mock");
-
-        let mut ga_expectation = context.ga_impl.clone();
-        if !is_associated {
-            ga_expectation = ga_expectation.add_lifetime("'mock");
-        };
-        let ga_expectation = ga_expectation.remove_lifetimes(&lts_temp);
-        let ga_expectation_builder = ga_impl_mock
-            .add_lifetime_clauses("'mock")
-            .add_lifetime("'mock_exp")
-            .remove_lifetimes(&lts_temp);
-        let ga_method = context.ga_impl.clone().remove_other(&context.ga_state);
-
-        let args = method
-            .sig
-            .inputs
-            .without_self_arg()
-            .cloned()
-            .collect::<Vec<_>>();
+        let args = method.sig.inputs.iter().cloned().collect::<Vec<_>>();
         let ret = method.sig.output.clone();
 
-        let (_ga_state_impl, ga_state_types, _ga_state_where) = context.ga_state.split_for_impl();
+        let (_ga_mock_impl, ga_mock_types, _ga_mock_where) = context.ga_mock.split_for_impl();
+        let type_mock = Type::Verbatim(quote!( Mock #ga_mock_types ));
 
-        let type_ = Type::from_ident(context.ident_state.clone());
-        let type_ = Type::Verbatim(quote!( #type_ #ga_state_types ));
-
+        let mut has_self_arg = false;
         let mut lts_mock = lts_temp.clone();
 
-        let args_with_lt = args
+        let args_prepared = args
             .iter()
-            .map(|i| match &*i.ty {
-                Type::Reference(t) => {
-                    let mut t = t.clone();
-                    t.lifetime = Some(lts_mock.generate());
-
-                    Type::Reference(t).replace_default_lifetime(&mut lts_mock)
-                }
-                t => t.clone().replace_default_lifetime(&mut lts_mock),
+            .map(|arg| match arg {
+                FnArg::Receiver(t) => PatType {
+                    attrs: t.attrs.clone(),
+                    pat: Box::new(Pat::Verbatim(quote!(this))),
+                    colon_token: Default::default(),
+                    ty: Box::new(
+                        t.ty.clone()
+                            .replace_self_type_checked(&type_mock, &mut has_self_arg),
+                    ),
+                },
+                FnArg::Typed(t) => PatType {
+                    attrs: t.attrs.clone(),
+                    pat: t.pat.clone(),
+                    colon_token: t.colon_token,
+                    ty: Box::new(
+                        t.ty.clone()
+                            .replace_self_type_checked(&type_mock, &mut has_self_arg),
+                    ),
+                },
             })
-            .collect();
-
-        let args_without_lt = args.iter().map(|i| i.ty.clone().make_static()).collect();
-
-        let args_without_self = args
+            .collect::<Vec<_>>();
+        let args_prepared_lt = args_prepared
             .iter()
-            .map(|i| i.ty.clone().replace_self_type(&type_))
+            .cloned()
+            .map(|mut t| {
+                t.ty = Box::new(t.ty.clone().replace_default_lifetime(&mut lts_mock));
+
+                t
+            })
             .collect::<Vec<_>>();
 
-        let return_type = ret.to_action_return_type(&parsed.ty);
+        let mut has_self_ret = false;
+        let return_type = ret.to_action_return_type_checked(&type_mock, &mut has_self_ret);
 
         let ident_method = method.sig.ident.clone();
         let ident_expect_method = format_expect_call(&ident_method, trait_.as_ref());
         let ident_expectation_module = format_expect_module(&ident_method, trait_.as_ref());
         let ident_expectation_field = format_expectations_field(&ident_expectation_module);
+
+        let ga_impl_mock = context.ga_impl.clone().add_lifetime("'mock");
+
+        let mut ga_expectation = context.ga_impl.clone();
+        if !is_associated || has_self_arg || has_self_ret {
+            ga_expectation = ga_expectation.add_lifetime("'mock");
+            if is_associated && has_self_ret {
+                ga_expectation
+                    .get_lifetime_mut("'mock")
+                    .unwrap()
+                    .bounds
+                    .push(Lifetime::new("'static", Span::call_site()))
+            }
+        };
+        let ga_expectation = ga_expectation.remove_lifetimes(&lts_temp);
+
+        let mut ga_expectation_builder = ga_impl_mock
+            .add_lifetime_bounds("'mock")
+            .add_lifetime("'mock_exp")
+            .remove_lifetimes(&lts_temp);
+        if is_associated && has_self_ret {
+            ga_expectation_builder
+                .get_lifetime_mut("'mock")
+                .unwrap()
+                .bounds
+                .push(Lifetime::new("'static", Span::call_site()))
+        }
+
+        let ga_method = context.ga_impl.clone().remove_other(&context.ga_state);
 
         Self(Arc::new(MethodContextData {
             context,
@@ -223,9 +276,8 @@ impl MethodContext {
             lts_temp,
             lts_mock,
 
-            args_with_lt,
-            args_without_lt,
-            args_without_self,
+            args_prepared,
+            args_prepared_lt,
             return_type,
 
             ident_method,
@@ -256,15 +308,14 @@ pub struct MethodContextData {
     pub ga_expectation: Generics,
     pub ga_expectation_builder: Generics,
 
-    pub args: Vec<PatType>,
+    pub args: Vec<FnArg>,
     pub ret: ReturnType,
 
     pub lts_temp: TempLifetimes,
     pub lts_mock: TempLifetimes,
 
-    pub args_with_lt: Vec<Type>,
-    pub args_without_lt: Vec<Type>,
-    pub args_without_self: Vec<Type>,
+    pub args_prepared: Vec<PatType>,
+    pub args_prepared_lt: Vec<PatType>,
     pub return_type: Type,
 
     pub ident_method: Ident,
