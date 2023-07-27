@@ -19,7 +19,7 @@ pub use iter_ex::IterEx;
 pub use method_ex::MethodEx;
 pub use return_type_ex::ReturnTypeEx;
 pub use temp_lifetimes::TempLifetimes;
-pub use type_ex::TypeEx;
+pub use type_ex::{LifetimeReplaceMode, TypeEx};
 
 pub fn format_expect_call(method: &Ident, as_trait: Option<&Path>) -> Ident {
     if let Some(t) = as_trait {

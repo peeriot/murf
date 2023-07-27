@@ -10,4 +10,4 @@ parking_lot = "0.12"
 
 [dev-dependencies]
 futures = "0.3"
-gmock-macros = { version = "*", features = [ ] }
+gmock-macros = { version = "*", features = [ "debug-to-file" ] }

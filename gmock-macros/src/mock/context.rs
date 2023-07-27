@@ -10,7 +10,7 @@ use syn::{
 
 use crate::misc::{
     format_expect_call, format_expect_module, format_expectations_field, GenericsEx, ItemImplEx,
-    MethodEx, ReturnTypeEx, TempLifetimes, TypeEx,
+    LifetimeReplaceMode, MethodEx, ReturnTypeEx, TempLifetimes, TypeEx,
 };
 
 use super::parsed::Parsed;
@@ -197,7 +197,7 @@ impl MethodContext {
                     colon_token: Default::default(),
                     ty: Box::new(
                         t.ty.clone()
-                            .replace_self_type_checked(&type_mock, &mut has_self_arg),
+                            .replace_self_type(&type_mock, &mut has_self_arg),
                     ),
                 },
                 FnArg::Typed(t) => PatType {
@@ -206,7 +206,7 @@ impl MethodContext {
                     colon_token: t.colon_token,
                     ty: Box::new(
                         t.ty.clone()
-                            .replace_self_type_checked(&type_mock, &mut has_self_arg),
+                            .replace_self_type(&type_mock, &mut has_self_arg),
                     ),
                 },
             })
@@ -215,14 +215,17 @@ impl MethodContext {
             .iter()
             .cloned()
             .map(|mut t| {
-                t.ty = Box::new(t.ty.clone().replace_default_lifetime(&mut lts_mock));
+                t.ty = Box::new(
+                    t.ty.clone()
+                        .replace_default_lifetime(LifetimeReplaceMode::Temp(&mut lts_mock)),
+                );
 
                 t
             })
             .collect::<Vec<_>>();
 
         let mut has_self_ret = false;
-        let return_type = ret.to_action_return_type_checked(&type_mock, &mut has_self_ret);
+        let return_type = ret.to_action_return_type(&type_mock, &mut has_self_ret);
 
         let ident_method = method.sig.ident.clone();
         let ident_expect_method = format_expect_call(&ident_method, trait_.as_ref());

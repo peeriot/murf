@@ -3,10 +3,24 @@ use std::{cell::UnsafeCell, mem::transmute};
 use proc_macro2::{Ident, Span};
 use syn::{
     punctuated::Punctuated, GenericArgument, Lifetime, Path, PathArguments, PathSegment,
-    ReturnType, Type, TypePath,
+    ReturnType, Type, TypeParamBound, TypePath,
 };
 
 use super::TempLifetimes;
+
+pub enum LifetimeReplaceMode<'x> {
+    Mock,
+    Temp(&'x mut TempLifetimes),
+}
+
+impl<'x> LifetimeReplaceMode<'x> {
+    fn generate(&mut self) -> Lifetime {
+        match self {
+            Self::Mock => Lifetime::new("'mock", Span::call_site()),
+            Self::Temp(tmp) => tmp.generate(),
+        }
+    }
+}
 
 pub trait TypeEx {
     fn from_ident(ident: Ident) -> Self;
@@ -14,9 +28,8 @@ pub trait TypeEx {
     fn contains_lifetime(&self, lt: &Lifetime) -> bool;
     fn contains_self_type(&self) -> bool;
 
-    fn replace_self_type(self, type_: &Type) -> Self;
-    fn replace_self_type_checked(self, type_: &Type, changed: &mut bool) -> Self;
-    fn replace_default_lifetime(self, lts: &mut TempLifetimes) -> Self;
+    fn replace_self_type(self, type_: &Type, changed: &mut bool) -> Self;
+    fn replace_default_lifetime(self, mode: LifetimeReplaceMode<'_>) -> Self;
 
     fn make_static(self) -> Self;
 }
@@ -83,13 +96,7 @@ impl TypeEx for Type {
         visitor.result
     }
 
-    fn replace_self_type(self, type_: &Type) -> Self {
-        let mut changed = false;
-
-        self.replace_self_type_checked(type_, &mut changed)
-    }
-
-    fn replace_self_type_checked(mut self, type_: &Type, changed: &mut bool) -> Self {
+    fn replace_self_type(mut self, type_: &Type, changed: &mut bool) -> Self {
         struct Visitor<'a> {
             type_: &'a Type,
             changed: &'a mut bool,
@@ -117,9 +124,9 @@ impl TypeEx for Type {
         self
     }
 
-    fn replace_default_lifetime(mut self, lts: &mut TempLifetimes) -> Self {
+    fn replace_default_lifetime(mut self, mode: LifetimeReplaceMode<'_>) -> Self {
         struct Visitor<'a> {
-            lts: &'a mut TempLifetimes,
+            mode: LifetimeReplaceMode<'a>,
         }
 
         impl<'a> TypeVisitor for Visitor<'a> {
@@ -128,7 +135,7 @@ impl TypeEx for Type {
 
                 if let Type::Reference(r) = ty {
                     if r.lifetime.is_none() {
-                        r.lifetime = Some(self.lts.generate());
+                        r.lifetime = Some(self.mode.generate());
                     }
                 }
 
@@ -139,14 +146,14 @@ impl TypeEx for Type {
                 let lt = unsafe { &mut *lt.get() };
 
                 if lt.ident == "_" {
-                    *lt = self.lts.generate();
+                    *lt = self.mode.generate();
                 }
 
                 true
             }
         }
 
-        let mut visitor = Visitor { lts };
+        let mut visitor = Visitor { mode };
 
         visitor.visit(unsafe_cell_mut(&mut self));
 
@@ -189,7 +196,7 @@ impl TypeEx for Type {
     }
 }
 
-trait TypeVisitor {
+trait TypeVisitor: Sized {
     fn visit_type(&mut self, ty: &UnsafeCell<Type>) -> bool {
         let _ty = ty;
 
@@ -209,49 +216,56 @@ trait TypeVisitor {
 
         let ty = unsafe { &*ty.get() };
 
-        match ty {
-            Type::Path(ty) => {
-                for seg in &ty.path.segments {
-                    match &seg.arguments {
-                        PathArguments::None => (),
-                        PathArguments::AngleBracketed(x) => {
-                            for arg in &x.args {
-                                match arg {
-                                    GenericArgument::Type(t) => {
-                                        if !self.visit(unsafe_cell_ref(t)) {
-                                            return false;
-                                        }
-                                    }
-                                    GenericArgument::Lifetime(lt) => {
-                                        if !self.visit_lifetime(unsafe_cell_ref(lt)) {
-                                            return false;
-                                        }
-                                    }
-                                    _ => (),
-                                }
-                            }
-                        }
-                        PathArguments::Parenthesized(x) => {
-                            for t in &x.inputs {
-                                if !self.visit(unsafe_cell_ref(t)) {
-                                    return false;
-                                }
-                            }
-
-                            match &x.output {
-                                ReturnType::Type(_, t) => {
-                                    if !self.visit(unsafe_cell_ref(t)) {
+        fn visit_path<X: TypeVisitor>(this: &mut X, path: &Path) -> bool {
+            for seg in &path.segments {
+                match &seg.arguments {
+                    PathArguments::None => (),
+                    PathArguments::AngleBracketed(x) => {
+                        for arg in &x.args {
+                            match arg {
+                                GenericArgument::Type(t) => {
+                                    if !this.visit(unsafe_cell_ref(t)) {
                                         return false;
                                     }
                                 }
-                                ReturnType::Default => (),
+                                GenericArgument::Lifetime(lt) => {
+                                    if !this.visit_lifetime(unsafe_cell_ref(lt)) {
+                                        return false;
+                                    }
+                                }
+                                GenericArgument::AssocType(t) => {
+                                    if !this.visit(unsafe_cell_ref(&t.ty)) {
+                                        return false;
+                                    }
+                                }
+                                _ => (),
                             }
                         }
                     }
-                }
+                    PathArguments::Parenthesized(x) => {
+                        for t in &x.inputs {
+                            if !this.visit(unsafe_cell_ref(t)) {
+                                return false;
+                            }
+                        }
 
-                true
+                        match &x.output {
+                            ReturnType::Type(_, t) => {
+                                if !this.visit(unsafe_cell_ref(t)) {
+                                    return false;
+                                }
+                            }
+                            ReturnType::Default => (),
+                        }
+                    }
+                }
             }
+
+            true
+        }
+
+        match ty {
+            Type::Path(ty) => visit_path(self, &ty.path),
             Type::Reference(t) => {
                 if let Some(lt) = &t.lifetime {
                     if !self.visit_lifetime(unsafe_cell_ref(lt)) {
@@ -271,6 +285,25 @@ trait TypeVisitor {
                 for t in &t.elems {
                     if !self.visit(unsafe_cell_ref(t)) {
                         return false;
+                    }
+                }
+
+                true
+            }
+            Type::TraitObject(t) => {
+                for b in &t.bounds {
+                    match b {
+                        TypeParamBound::Lifetime(lt) => {
+                            if !self.visit_lifetime(unsafe_cell_ref(lt)) {
+                                return false;
+                            }
+                        }
+                        TypeParamBound::Trait(t) => {
+                            if !visit_path(self, &t.path) {
+                                return false;
+                            }
+                        }
+                        _ => (),
                     }
                 }
 
