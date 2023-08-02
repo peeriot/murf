@@ -28,6 +28,9 @@ pub fn exec(input: TokenStream) -> TokenStream {
         Err(err) => return err.to_compile_error(),
     };
 
+    #[cfg(feature = "debug-to-file")]
+    let ident = mock.ty.ident().to_string();
+
     #[allow(clippy::let_and_return)]
     let tokens = Mocked::new(mock).into_token_stream();
 
@@ -35,19 +38,23 @@ pub fn exec(input: TokenStream) -> TokenStream {
     println!("\nmock!:\n{tokens:#}\n");
 
     #[cfg(feature = "debug-to-file")]
-    let _ = debug_to_file(&tokens);
+    let _ = debug_to_file(&tokens, &ident);
 
     tokens
 }
 
 #[cfg(feature = "debug-to-file")]
-fn debug_to_file(tokens: &TokenStream) -> std::io::Result<()> {
+fn debug_to_file(tokens: &TokenStream, ident: &str) -> std::io::Result<()> {
     use std::fs::{create_dir_all, write};
     use std::path::PathBuf;
 
+    use convert_case::{Case, Casing};
     use proc_macro::Span;
 
-    let path = Span::call_site().source_file().path();
+    let path = Span::call_site()
+        .source_file()
+        .path()
+        .join(ident.to_case(Case::Snake));
     let path = PathBuf::from("./target/generated").join(path);
 
     if let Some(parent) = path.parent() {

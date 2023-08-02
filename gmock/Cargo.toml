@@ -11,4 +11,4 @@ parse_duration = "2.1"
 
 [dev-dependencies]
 futures = "0.3"
-gmock-macros = { version = "*", features = [ "debug-to-file" ] }
+gmock-macros = { version = "*", features = [ ] }

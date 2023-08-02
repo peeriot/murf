@@ -31,7 +31,7 @@ impl MockModule {
         let context = Context::new(parsed);
         let mock = Mock::new(context.clone());
         let mockable = Mockable::new(context.clone());
-        let mockable_default = MockableDefault;
+        let mockable_default = MockableDefault::new(context.clone());
         let handle = Handle::new(context.clone());
         let shared = Shared::new(context.clone());
         let expectations = Vec::new();

@@ -37,6 +37,8 @@ pub struct ContextData {
 
     pub trait_send: Option<TokenStream>,
     pub trait_sync: Option<TokenStream>,
+
+    pub extern_mock_lifetime: bool,
 }
 
 impl Context {
@@ -62,6 +64,8 @@ impl Context {
         let trait_send = derive_send.then(|| quote!(+ Send));
         let trait_sync = derive_sync.then(|| quote!(+ Sync));
 
+        let extern_mock_lifetime = ga_state.lifetimes().any(|lt| lt.lifetime.ident == "mock");
+
         Self(Arc::new(ContextData {
             ident_module,
             ident_mock,
@@ -79,6 +83,8 @@ impl Context {
 
             trait_send,
             trait_sync,
+
+            extern_mock_lifetime,
         }))
     }
 }
