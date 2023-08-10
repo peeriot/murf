@@ -30,7 +30,7 @@ fn success() {
 
     let (handle, mock) = MyStruct::mock_with_handle::<'_>();
 
-    expect_method_call!(handle as Values<usize>, values()).will_once(Return(values.iter()));
+    expect_method_call!(handle as Values, values()).will_once(Return(values.iter()));
 
     let values = mock.values().cloned().collect::<Vec<_>>();
 

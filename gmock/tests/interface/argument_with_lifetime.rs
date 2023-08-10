@@ -21,7 +21,7 @@ mock! {
 fn success() {
     let (handle, mock) = Handler::mock_with_handle();
 
-    expect_method_call!(handle as Fuu<Event<'a>>, fuu(Closure(|_: &Event<'_>| true)));
+    expect_method_call!(handle as Fuu, fuu(Closure(|_: &Event<'_>| true)));
 
     mock.fuu(Event(PhantomData));
 }

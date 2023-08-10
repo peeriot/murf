@@ -1,7 +1,7 @@
 use quote::{quote, ToTokens};
 use syn::{FnArg, ImplItemFn, Item, PatType, ReturnType, Stmt, Type};
 
-use crate::misc::{FormattedString, IterEx, TypeEx};
+use crate::misc::{AttribsEx, FormattedString, IterEx, TypeEx};
 
 use super::context::{MethodContext, MethodContextData};
 
@@ -11,6 +11,7 @@ impl MockMethod {
     pub fn render(context: &MethodContext, mut method: ImplItemFn) -> ImplItemFn {
         let MethodContextData {
             is_associated,
+            no_default_impl,
             impl_,
             trait_,
             ga_expectation,
@@ -88,21 +89,30 @@ impl MockMethod {
             FnArg::Typed(t) => t.pat.to_token_stream(),
         });
 
-        let default_action = if let Some(t) = trait_ {
+        let default_action = if *no_default_impl {
+            quote!(panic!("No default implementation for expectation {}", ex))
+        } else if let Some(t) = trait_ {
             let method = &method.sig.ident;
             let self_ty = &impl_.self_ty;
 
-            quote!(<#self_ty as #t>::#method)
+            quote! {
+                let #arg_names_prepared = args;
+                let ret = <#self_ty as #t>::#method ( #( #default_args ),* );
+            }
         } else {
             let t = &impl_.self_ty;
             let method = &method.sig.ident;
 
-            quote!(#t::#method)
+            quote! {
+                let #arg_names_prepared = args;
+                let ret = #t::#method ( #( #default_args ),* );
+            }
         };
 
         let result = match ret {
-            ReturnType::Default => quote!(ret),
-            ReturnType::Type(_, t) => match &**t {
+            _ if *no_default_impl => None,
+            ReturnType::Default => Some(quote!(ret)),
+            ReturnType::Type(_, t) => Some(match &**t {
                 Type::Reference(r)
                     if r.mutability.is_some() && r.elem.to_formatted_string() == "Self" =>
                 {
@@ -121,14 +131,14 @@ impl MockMethod {
                 }>),
                 t if t.contains_self_type() => {
                     let s = format!(
-                        "No default conversion for `{}` or expectation {{}}",
+                        "No default implementation for `{}` for expectation {{}}",
                         t.to_formatted_string()
                     );
 
                     quote!(panic!(#s, ex))
                 }
                 _ => quote!(ret),
-            },
+            }),
         };
 
         let error = if let Some(t) = trait_ {
@@ -209,9 +219,7 @@ impl MockMethod {
                 return if let Some(action) = &mut ex.action {
                     action.exec(args)
                 } else {
-                    let #arg_names_prepared = args;
-                    let ret = #default_action ( #( #default_args ),* );
-
+                    #default_action
                     #result
                 };
             }
@@ -221,6 +229,6 @@ impl MockMethod {
             panic!(#error);
         }))];
 
-        method
+        method.remove_gmock_attrs()
     }
 }

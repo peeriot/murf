@@ -3,10 +3,13 @@ use quote::quote;
 use syn::{
     punctuated::Punctuated,
     token::{Colon, Comma, Gt, Lt},
-    GenericParam, Generics, Lifetime, LifetimeParam, TypeParamBound,
+    GenericArgument, GenericParam, Generics, Lifetime, LifetimeParam, PathArguments, Type,
+    TypeParamBound, WherePredicate,
 };
 
 use crate::misc::IterEx;
+
+use super::TypeEx;
 
 pub trait GenericsEx {
     fn get_lifetime_mut(&mut self, lt: &str) -> Option<&mut LifetimeParam>;
@@ -18,6 +21,9 @@ pub trait GenericsEx {
     fn remove_other(self, other: &Generics) -> Self;
 
     fn make_phantom_data(&self) -> TokenStream;
+
+    fn merge(self, other: &Generics) -> Self;
+    fn replace_self_type(self, type_: &Type, changed: &mut bool) -> Self;
 }
 
 impl GenericsEx for Generics {
@@ -154,5 +160,73 @@ impl GenericsEx for Generics {
             .parenthesis();
 
         quote!(PhantomData<#params>)
+    }
+
+    fn merge(mut self, other: &Generics) -> Self {
+        for p1 in &other.params {
+            let mut merged = false;
+
+            for p2 in &mut self.params {
+                match (p1, p2) {
+                    (GenericParam::Type(p1), GenericParam::Type(p2)) if p1.ident == p2.ident => {
+                        p2.bounds.extend(p1.bounds.clone());
+
+                        merged = true;
+                        break;
+                    }
+                    (GenericParam::Lifetime(p1), GenericParam::Lifetime(p2))
+                        if p1.lifetime.ident == p2.lifetime.ident =>
+                    {
+                        p2.bounds.extend(p1.bounds.clone());
+
+                        merged = true;
+                        break;
+                    }
+                    (_, _) => (),
+                }
+            }
+
+            if !merged {
+                self.params.push(p1.clone());
+            }
+        }
+
+        self
+    }
+
+    fn replace_self_type(mut self, type_: &Type, changed: &mut bool) -> Self {
+        let Some(where_clause) = &mut self.where_clause else {
+            return self;
+        };
+
+        for p in &mut where_clause.predicates {
+            let WherePredicate::Type(t) = p else {
+                continue;
+            };
+
+            t.bounded_ty = t.bounded_ty.clone().replace_self_type(type_, changed);
+
+            for b in &mut t.bounds {
+                let TypeParamBound::Trait(t) = b else {
+                    continue;
+                };
+
+                for s in &mut t.path.segments {
+                    let PathArguments::AngleBracketed(a) = &mut s.arguments else {
+                        continue;
+                    };
+
+                    for a in &mut a.args {
+                        let GenericArgument::Type(t) = a else {
+                            continue;
+                        };
+
+                        *t = t.clone().replace_self_type(type_, changed);
+                    }
+                }
+            }
+        }
+
+        self
     }
 }

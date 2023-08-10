@@ -86,10 +86,10 @@ impl ToTokens for Mock {
 
             let trait_ = trait_.as_ref().map(|t| quote!( #t for ));
 
-            let (ga_impl, _ga_types, _ga_where) = ga_impl_mock.split_for_impl();
+            let (ga_impl, _ga_types, ga_where) = ga_impl_mock.split_for_impl();
 
             quote! {
-                impl #ga_impl #trait_ Mock #ga_mock_types #ga_mock_where {
+                impl #ga_impl #trait_ Mock #ga_mock_types #ga_where {
                     #( #items )*
                 }
             }

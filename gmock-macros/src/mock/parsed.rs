@@ -9,6 +9,8 @@ use syn::{
     Path, ReturnType, Stmt, TraitItemFn, Type, Visibility,
 };
 
+use crate::misc::AttribsEx;
+
 /// Parsed code inside the mock! macro
 pub struct Parsed {
     pub ty: TypeToMock,
@@ -135,7 +137,7 @@ impl ToTokens for Parsed {
 
         if !self.ty.is_extern() {
             for i in &self.impls {
-                i.to_tokens(tokens);
+                i.clone().remove_gmock_attrs().to_tokens(tokens);
             }
         }
     }
@@ -175,37 +177,31 @@ impl TypeToMock {
             Self::Unknown { generics, .. } => generics,
         }
     }
+}
 
-    pub fn attributes(&self) -> &[Attribute] {
+impl AttribsEx for TypeToMock {
+    fn derives(&self, ident: &str) -> bool {
         match self {
-            Self::Enum(o) => &o.attrs,
-            Self::Struct(o) => &o.attrs,
-            Self::Extern { .. } => &[],
-            Self::Unknown { .. } => &[],
+            Self::Enum(o) => o.derives(ident),
+            Self::Struct(o) => o.derives(ident),
+            _ => false,
         }
     }
 
-    pub fn derives(&self, ident: &str) -> bool {
-        self.attributes().iter().any(|attr| match &attr.meta {
-            Meta::List(ml) if attr.path().is_ident("derive") => {
-                let mut ret = false;
-
-                let _ = ml.parse_args_with(|p: ParseStream<'_>| {
-                    if let Ok(ml) = Punctuated::<Path, Comma>::parse_separated_nonempty(p) {
-                        for p in &ml {
-                            if p.is_ident(ident) {
-                                ret = true;
-                            }
-                        }
-                    }
-
-                    Ok(())
-                });
-
-                ret
-            }
+    fn has_gmock_attr(&self, ident: &str) -> bool {
+        match self {
+            Self::Enum(o) => o.has_gmock_attr(ident),
+            Self::Struct(o) => o.has_gmock_attr(ident),
             _ => false,
-        })
+        }
+    }
+
+    fn remove_gmock_attrs(self) -> Self {
+        match self {
+            Self::Enum(o) => Self::Enum(o.remove_gmock_attrs()),
+            Self::Struct(o) => Self::Struct(o.remove_gmock_attrs()),
+            x => x,
+        }
     }
 }
 

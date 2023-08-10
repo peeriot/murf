@@ -30,7 +30,7 @@ fn success() {
     let fuu = Wrapper(&fuu);
     let (handle, mock) = MyStruct::mock_with_handle();
 
-    expect_method_call!(handle as Fuu<T>, fuu(eq(fuu)));
+    expect_method_call!(handle as Fuu, fuu(eq(fuu)));
 
     mock.fuu(Wrapper(&123usize));
 }

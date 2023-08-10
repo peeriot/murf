@@ -3,11 +3,13 @@ use std::borrow::Cow;
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
+    parenthesized,
     parse::{Parse, ParseStream},
     parse2,
     punctuated::Punctuated,
-    token::Comma,
-    Expr, ExprCall, Path, Result as ParseResult, Token, Type,
+    token::{Comma, Gt, Lt, PathSep},
+    AngleBracketedGenericArguments, Expr, GenericArgument, Path, PathArguments,
+    Result as ParseResult, Token, Type,
 };
 
 use crate::misc::{format_expect_call, IterEx};
@@ -34,6 +36,7 @@ struct Call {
     obj: Box<Expr>,
     as_trait: Option<Path>,
     method: Ident,
+    generics: Punctuated<GenericArgument, Token![,]>,
     args: Punctuated<Expr, Comma>,
     mode: CallMode,
 }
@@ -53,25 +56,21 @@ impl Parse for Call {
         };
 
         input.parse::<Token![,]>()?;
-
-        let call: ExprCall = input.parse()?;
-
-        let method = if let Expr::Path(p) = *call.func {
-            if let Some(method) = p.path.get_ident() {
-                method.clone()
-            } else {
-                return Err(input.error("Expect method identifier"));
-            }
+        let method = input.parse::<Ident>()?;
+        let generics = if input.peek(Token![::]) {
+            AngleBracketedGenericArguments::parse_turbofish(input)?.args
         } else {
-            return Err(input.error("Expect method identifier"));
+            Punctuated::default()
         };
-
-        let args = call.args;
+        let content;
+        parenthesized!(content in input);
+        let args = content.parse_terminated(Expr::parse, Token![,])?;
 
         Ok(Self {
             obj,
             as_trait,
             method,
+            generics,
             args,
             mode: CallMode::Static,
         })
@@ -84,6 +83,7 @@ impl ToTokens for Call {
             obj,
             as_trait,
             method,
+            generics,
             args,
             mode,
         } = self;
@@ -91,6 +91,30 @@ impl ToTokens for Call {
         let desc = quote!(format!("at {}:{}", file!(), line!()));
         let obj = obj.to_token_stream();
         let method = format_expect_call(method, as_trait.as_ref());
+        let generics = as_trait
+            .as_ref()
+            .and_then(|t| t.segments.last())
+            .and_then(|s| {
+                if let PathArguments::AngleBracketed(a) = &s.arguments {
+                    Some(a.args.clone())
+                } else {
+                    None
+                }
+            })
+            .into_iter()
+            .flatten()
+            .chain(generics.iter().cloned())
+            .collect::<Punctuated<_, Comma>>();
+        let turbofish = if generics.is_empty() {
+            None
+        } else {
+            Some(AngleBracketedGenericArguments {
+                colon2_token: Some(PathSep::default()),
+                lt_token: Lt::default(),
+                args: generics,
+                gt_token: Gt::default(),
+            })
+        };
         let args = if args.is_empty() && mode == &CallMode::Static {
             quote!(.with(gmock::matcher::no_args()))
         } else {
@@ -112,7 +136,7 @@ impl ToTokens for Call {
         };
 
         tokens.extend(quote! {
-            #obj.mock_handle().#method().description(#desc)#args
+            #obj.mock_handle().#method #turbofish().description(#desc)#args
         });
 
         #[cfg(feature = "debug")]

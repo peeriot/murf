@@ -1,3 +1,4 @@
+mod attribs_ex;
 mod formatted_string;
 mod generics_ex;
 mod item_impl_ex;
@@ -9,9 +10,10 @@ mod type_ex;
 
 use convert_case::{Case, Casing};
 use proc_macro2::Ident;
-use quote::{format_ident, ToTokens};
+use quote::format_ident;
 use syn::Path;
 
+pub use attribs_ex::AttribsEx;
 pub use formatted_string::FormattedString;
 pub use generics_ex::GenericsEx;
 pub use item_impl_ex::ItemImplEx;
@@ -25,8 +27,11 @@ pub fn format_expect_call(method: &Ident, as_trait: Option<&Path>) -> Ident {
     if let Some(t) = as_trait {
         format_ident!(
             "as_{}_expect_{}",
-            t.to_token_stream()
-                .to_string()
+            t.segments
+                .iter()
+                .map(|s| s.ident.to_string())
+                .collect::<Vec<_>>()
+                .join("_")
                 .replace(|c: char| !c.is_alphanumeric(), "_")
                 .to_case(Case::Snake),
             method
@@ -40,8 +45,11 @@ pub fn format_expect_module(method: &Ident, as_trait: Option<&Path>) -> Ident {
     if let Some(t) = as_trait {
         format_ident!(
             "mock_trait_{}_method_{}",
-            t.to_token_stream()
-                .to_string()
+            t.segments
+                .iter()
+                .map(|s| s.ident.to_string())
+                .collect::<Vec<_>>()
+                .join("_")
                 .replace(|c: char| !c.is_alphanumeric(), "_")
                 .to_case(Case::Snake),
             method
