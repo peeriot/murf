@@ -239,6 +239,13 @@ impl MethodContext {
         let mut has_self_ret = false;
         let return_type = ret.to_action_return_type(&type_mock, &mut has_self_ret);
 
+        let type_signature = args_prepared
+            .iter()
+            .map(|t| t.ty.deref().clone())
+            .chain(Some(return_type.clone()))
+            .map(TypeEx::make_static)
+            .collect();
+
         let ident_method = method.sig.ident.clone();
         let ident_expect_method = format_expect_call(&ident_method, trait_.as_ref());
         let ident_expectation_module = format_expect_module(&ident_method, trait_.as_ref());
@@ -299,6 +306,7 @@ impl MethodContext {
             args_prepared,
             args_prepared_lt,
             return_type,
+            type_signature,
 
             ident_method,
             ident_expect_method,
@@ -338,6 +346,7 @@ pub struct MethodContextData {
     pub args_prepared: Vec<PatType>,
     pub args_prepared_lt: Vec<PatType>,
     pub return_type: Type,
+    pub type_signature: Vec<Type>,
 
     pub ident_method: Ident,
     pub ident_expect_method: Ident,

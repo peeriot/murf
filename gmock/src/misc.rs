@@ -64,6 +64,7 @@ pub trait Expectation: Display {
     fn type_id(&self) -> usize;
     fn is_ready(&self) -> bool;
     fn set_done(&self);
+    fn type_signature(&self) -> &'static str;
 }
 
 pub fn next_type_id() -> usize {

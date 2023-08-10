@@ -20,6 +20,7 @@ impl MockMethod {
             args,
             ret,
             args_prepared,
+            type_signature,
             ..
         } = &**context;
 
@@ -69,6 +70,7 @@ impl MockMethod {
             })
             .parenthesis();
 
+        let type_signature = type_signature.parenthesis();
         let arg_names_prepared = args_prepared.iter().map(|arg| &arg.pat).parenthesis();
 
         let default_args = method.sig.inputs.iter().map(|i| match i {
@@ -169,7 +171,14 @@ impl MockMethod {
                 let _ = writeln!(msg, "- {}", ex);
 
                 /* type matches? */
-                assert_eq!(ex.type_id(), *#ident_expectation_module::TYPE_ID);
+                if ex.type_signature() != type_name::<#type_signature>() {
+                    let _ = writeln!(msg, "    The type signature mismatched");
+                    let _ = writeln!(msg, "        Expected:  `{}`", type_name::<#type_signature>());
+                    let _ = writeln!(msg, "        But found: `{}`", ex.type_signature());
+
+                    continue;
+                }
+                let _ = writeln!(msg, "    The type matched");
 
                 let ex: &mut dyn gmock::Expectation = &mut **ex;
                 let ex = unsafe { &mut *(ex as *mut dyn gmock::Expectation as *mut #ident_expectation_module::Expectation #ga_expectation_types) };

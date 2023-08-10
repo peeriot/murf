@@ -69,7 +69,9 @@ impl ToTokens for Expectation {
 
             args_prepared,
             args_prepared_lt,
+
             return_type,
+            type_signature,
             ..
         } = &**context;
 
@@ -96,6 +98,7 @@ impl ToTokens for Expectation {
             quote!(+ 'mock)
         };
 
+        let type_signature = type_signature.parenthesis();
         let arg_types_prepared = args_prepared.iter().map(|t| &t.ty).parenthesis();
         let arg_types_prepared_lt = args_prepared_lt.iter().map(|t| &t.ty).parenthesis();
 
@@ -149,6 +152,10 @@ impl ToTokens for Expectation {
                     for seq_handle in &self.sequences {
                         seq_handle.set_done();
                     }
+                }
+
+                fn type_signature(&self) -> &'static str {
+                    type_name::<#type_signature>()
                 }
             }
 
