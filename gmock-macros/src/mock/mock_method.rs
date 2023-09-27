@@ -172,39 +172,45 @@ impl MockMethod {
 
                 /* type matches? */
                 if ex.type_signature() != type_name::<#type_signature>() {
-                    let _ = writeln!(msg, "    The type signature mismatched");
+                    let _ = writeln!(msg, "    Type signature mismatched");
                     let _ = writeln!(msg, "        Expected:  `{}`", type_name::<#type_signature>());
                     let _ = writeln!(msg, "        But found: `{}`", ex.type_signature());
 
                     continue;
                 }
-                let _ = writeln!(msg, "    The type matched");
+                let _ = writeln!(msg, "    Type signature matched");
 
                 let ex: &mut dyn gmock::Expectation = &mut **ex;
                 let ex = unsafe { &mut *(ex as *mut dyn gmock::Expectation as *mut #ident_expectation_module::Expectation #ga_expectation_types) };
 
+                let mut is_valid = true;
+
                 /* value matches? */
                 if !ex.matches(&args) {
-                    let _ = writeln!(msg, "    The value mismatched");
-                    continue;
+                    let _ = writeln!(msg, "    Value mismatched");
+
+                    is_valid = false;
+                } else {
+                    let _ = writeln!(msg, "    Value matched");
                 }
-                let _ = writeln!(msg, "    The value matched");
 
                 /* is done? */
                 let all_sequences_done = !ex.sequences.is_empty() && ex.sequences.iter().all(|s| s.is_done());
                 if ex.times.is_done() || all_sequences_done {
-                    let _ = writeln!(msg, "    but it is already done");
+                    let _ = writeln!(msg, "    Already done");
 
-                    continue;
+                    is_valid = false;
+                } else {
+                    let _ = writeln!(msg, "    Not done yet");
                 }
-                let _ = writeln!(msg, "    and it is not done yet");
 
                 /* is active? */
                 let mut is_active = true;
                 for seq_handle in &ex.sequences {
-                    if !seq_handle.is_active() {
+                    if !seq_handle.is_done() && !seq_handle.is_active() {
                         if take(&mut is_active) {
-                            let _ = writeln!(msg, "    but it is not active yet");
+                            is_valid = false;
+                            let _ = writeln!(msg, "    Not active yet");
                         }
 
                         let _ = writeln!(msg, "      sequence #{} has unsatisfied expectations", seq_handle.sequence_id());
@@ -213,7 +219,8 @@ impl MockMethod {
                         }
                     }
                 }
-                if !is_active {
+
+                if !is_valid {
                     continue;
                 }
 
