@@ -200,4 +200,14 @@ mod tests {
         assert_eq!(true, t.is_ready());
         assert_eq!(true, t.is_done());
     }
+
+    #[test]
+    fn range_zero_to_one() {
+        let t = Times::new(0..=1);
+        assert_eq!(true, t.is_ready());
+        assert_eq!(false, t.is_done());
+        t.increment();
+        assert_eq!(true, t.is_ready());
+        assert_eq!(true, t.is_done());
+    }
 }

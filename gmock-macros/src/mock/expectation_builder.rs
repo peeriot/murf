@@ -167,6 +167,12 @@ impl ToTokens for ExpectationBuilder {
                         let desc = expectation.to_string();
                         for seq_handle in &expectation.sequences {
                             seq_handle.set_description(desc.clone());
+
+                            if expectation.times.is_ready() {
+                                for seq_handle in &expectation.sequences {
+                                    seq_handle.set_ready();
+                                }
+                            }
                         }
 
                         #drop_handler;

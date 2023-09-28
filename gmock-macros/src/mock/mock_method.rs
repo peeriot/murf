@@ -172,13 +172,13 @@ impl MockMethod {
 
                 /* type matches? */
                 if ex.type_signature() != type_name::<#type_signature>() {
-                    let _ = writeln!(msg, "    Type signature mismatched");
+                    let _ = writeln!(msg, "    Type signature:      not ok");
                     let _ = writeln!(msg, "        Expected:  `{}`", type_name::<#type_signature>());
                     let _ = writeln!(msg, "        But found: `{}`", ex.type_signature());
 
                     continue;
                 }
-                let _ = writeln!(msg, "    Type signature matched");
+                let _ = writeln!(msg, "    Type signature:      ok");
 
                 let ex: &mut dyn gmock::Expectation = &mut **ex;
                 let ex = unsafe { &mut *(ex as *mut dyn gmock::Expectation as *mut #ident_expectation_module::Expectation #ga_expectation_types) };
@@ -187,35 +187,42 @@ impl MockMethod {
 
                 /* value matches? */
                 if !ex.matches(&args) {
-                    let _ = writeln!(msg, "    Value mismatched");
+                    let _ = writeln!(msg, "    Argument matcher:    not ok");
 
                     is_valid = false;
                 } else {
-                    let _ = writeln!(msg, "    Value matched");
+                    let _ = writeln!(msg, "    Argument matcher:    ok");
                 }
 
                 /* is done? */
-                let all_sequences_done = !ex.sequences.is_empty() && ex.sequences.iter().all(|s| s.is_done());
-                if ex.times.is_done() || all_sequences_done {
-                    let _ = writeln!(msg, "    Already done");
+                if ex.times.is_done() {
+                    let _ = writeln!(msg, "    Call count:          done");
 
                     is_valid = false;
+                } else if ex.times.is_ready() {
+                    let _ = writeln!(msg, "    Call count:          ok");
                 } else {
-                    let _ = writeln!(msg, "    Not done yet");
+                    let _ = writeln!(msg, "    Call count:          not ok");
                 }
 
                 /* is active? */
                 let mut is_active = true;
                 for seq_handle in &ex.sequences {
-                    if !seq_handle.is_done() && !seq_handle.is_active() {
-                        if take(&mut is_active) {
-                            is_valid = false;
-                            let _ = writeln!(msg, "    Not active yet");
-                        }
+                    if seq_handle.is_done() {
+                        let s = seq_handle.sequence_id().to_string();
+                        let _ = writeln!(msg, "    Sequence #{}:{:>2$}done", s, "", 10 - s.len());
+                    } else if seq_handle.is_active() {
+                        let s = seq_handle.sequence_id().to_string();
+                        let _ = writeln!(msg, "    Sequence #{}:{:>2$}active", s, "", 10 - s.len());
+                    } else {
+                        is_valid = false;
 
-                        let _ = writeln!(msg, "      sequence #{} has unsatisfied expectations", seq_handle.sequence_id());
+                        let s = seq_handle.sequence_id().to_string();
+                        let _ = writeln!(msg, "    Sequence #{}:{:>2$}not active", s, "", 10 - s.len());
+                        let _ = writeln!(msg, "        has unsatisfied expectations");
+
                         for ex in seq_handle.unsatisfied() {
-                            let _ = writeln!(msg, "        - {}", ex);
+                            let _ = writeln!(msg, "          - {}", ex);
                         }
                     }
                 }
