@@ -204,15 +204,17 @@ impl MockMethod {
 
                     is_valid = false;
                 } else if ex.times.is_ready() {
-                    let _ = writeln!(msg, "    Call count:          ok");
+                    let _ = writeln!(msg, "    Call count:          ready");
                 } else {
-                    let _ = writeln!(msg, "    Call count:          not ok");
+                    let _ = writeln!(msg, "    Call count:          ok");
                 }
 
                 /* is active? */
                 let mut is_active = true;
                 for seq_handle in &ex.sequences {
                     if seq_handle.is_done() {
+                        is_valid = false;
+
                         let s = seq_handle.sequence_id().to_string();
                         let _ = writeln!(msg, "    Sequence #{}:{:>2$}done", s, "", 10 - s.len());
                     } else if seq_handle.is_active() {
