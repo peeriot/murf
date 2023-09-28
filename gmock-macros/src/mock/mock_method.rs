@@ -94,20 +94,24 @@ impl MockMethod {
         let default_action = if *no_default_impl {
             quote!(panic!("No default implementation for expectation {}", ex))
         } else if let Some(t) = trait_ {
-            let method = &method.sig.ident;
+            let ident = &method.sig.ident;
             let self_ty = &impl_.self_ty;
+            let (_, ga_types, _) = method.sig.generics.split_for_impl();
+            let turbofish = ga_types.as_turbofish();
 
             quote! {
                 let #arg_names_prepared = args;
-                let ret = <#self_ty as #t>::#method ( #( #default_args ),* );
+                let ret = <#self_ty as #t>::#ident #turbofish ( #( #default_args ),* );
             }
         } else {
             let t = &impl_.self_ty;
-            let method = &method.sig.ident;
+            let ident = &method.sig.ident;
+            let (_, ga_types, _) = method.sig.generics.split_for_impl();
+            let turbofish = ga_types.as_turbofish();
 
             quote! {
                 let #arg_names_prepared = args;
-                let ret = #t::#method ( #( #default_args ),* );
+                let ret = #t::#ident #turbofish ( #( #default_args ),* );
             }
         };
 

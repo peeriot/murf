@@ -140,22 +140,18 @@ impl GenericsEx for Generics {
         let params = self
             .params
             .iter()
-            .map(|param| match param {
+            .filter_map(|param| match param {
                 GenericParam::Lifetime(lt) => {
                     let lt = &lt.lifetime;
 
-                    quote!(& #lt ())
+                    Some(quote!(& #lt ()))
                 }
                 GenericParam::Type(ty) => {
                     let ident = &ty.ident;
 
-                    quote!(#ident)
+                    Some(quote!(#ident))
                 }
-                GenericParam::Const(ct) => {
-                    let ident = &ct.ident;
-
-                    quote!(#ident)
-                }
+                GenericParam::Const(_) => None,
             })
             .parenthesis();
 
