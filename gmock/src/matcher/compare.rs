@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 
 use super::Matcher;
 
@@ -12,7 +12,7 @@ macro_rules! impl_matcher {
 
         impl<T, X> Matcher<X> for $type<T>
         where
-            T: $trait<X> + Display,
+            T: $trait<X> + Debug,
         {
             fn matches(&self, value: &X) -> bool {
                 self.0.$method(value)
@@ -25,10 +25,10 @@ macro_rules! impl_matcher {
     };
 }
 
-impl_matcher!(Eq, PartialEq::eq, "Eq({})");
-impl_matcher!(Ne, PartialEq::ne, "Ne({})");
+impl_matcher!(Eq, PartialEq::eq, "Eq({:?})");
+impl_matcher!(Ne, PartialEq::ne, "Ne({:?})");
 
-impl_matcher!(Lt, PartialOrd::lt, "Lt({})");
-impl_matcher!(Le, PartialOrd::le, "Le({})");
-impl_matcher!(Gt, PartialOrd::gt, "Gt({})");
-impl_matcher!(Ge, PartialOrd::ge, "Ge({})");
+impl_matcher!(Lt, PartialOrd::lt, "Lt({:?})");
+impl_matcher!(Le, PartialOrd::le, "Le({:?})");
+impl_matcher!(Gt, PartialOrd::gt, "Gt({:?})");
+impl_matcher!(Ge, PartialOrd::ge, "Ge({:?})");

@@ -210,7 +210,6 @@ impl MockMethod {
                 }
 
                 /* is active? */
-                let mut is_active = true;
                 for seq_handle in &ex.sequences {
                     if seq_handle.is_done() {
                         is_valid = false;

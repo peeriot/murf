@@ -80,7 +80,11 @@ impl ToTokens for Handle {
 
             impl #ga_handle_impl Handle #ga_handle_types #ga_handle_where {
                 pub fn checkpoint(&self) {
-                    self.shared.lock().checkpoint();
+                    if let Some(mut locked) = self.shared.try_lock() {
+                        locked.checkpoint();
+                    } else {
+                        panic!("Unable to lock handle: Deadlock? Make sure that you do not drop a handle (or call `checkpoint` directly) of the same object inside an action of an expectation.");
+                    }
                 }
 
                 pub fn mock_handle(&self) -> &Self {
@@ -125,7 +129,7 @@ impl ToTokens for Handle {
             impl #ga_handle_impl Drop for Handle #ga_handle_types #ga_handle_where {
                 fn drop(&mut self) {
                     if self.check_on_drop && !::std::thread::panicking() {
-                        self.shared.lock().checkpoint();
+                        self.checkpoint();
                     }
                 }
             }
