@@ -1,6 +1,7 @@
 mod any;
 mod closure;
 mod compare;
+mod deref;
 mod multi;
 mod no_args;
 mod range;
@@ -11,6 +12,7 @@ use std::fmt::{Formatter, Result as FmtResult};
 pub use any::{any, Any};
 pub use closure::{closure, Closure};
 pub use compare::{eq, ge, gt, le, lt, ne, Eq, Ge, Gt, Le, Lt, Ne};
+pub use deref::{deref, Deref};
 pub use multi::{multi, Multi};
 pub use no_args::{no_args, NoArgs};
 pub use range::{range, Range};
