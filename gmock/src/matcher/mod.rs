@@ -6,6 +6,7 @@ mod multi;
 mod no_args;
 mod range;
 mod string;
+mod inspect;
 
 use std::fmt::{Formatter, Result as FmtResult};
 
@@ -20,6 +21,7 @@ pub use string::{
     contains as str_contains, ends_with as str_ends_with, is_empty, starts_with as str_starts_with,
     Contains as StrContains, EndsWith as StrEndsWith, IsEmpty, StartsWith as StrStartsWith,
 };
+pub use inspect::{inspect, Inspect};
 
 pub trait Matcher<T> {
     fn matches(&self, value: &T) -> bool;
