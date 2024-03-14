@@ -1,6 +1,7 @@
 use gmock::{expect_method_call, mock};
 
 trait Fuu {
+    #[allow(clippy::mut_from_ref)]
     fn fuu(&self, x: usize) -> &mut usize;
 }
 

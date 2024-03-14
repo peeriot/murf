@@ -14,7 +14,13 @@ where
     M: Matcher<T>,
 {
     fn matches(&self, value: &T) -> bool {
-        println!("{}", FormatHelper { matcher: &self.0, value });
+        println!(
+            "{}",
+            FormatHelper {
+                matcher: &self.0,
+                value
+            }
+        );
 
         self.0.matches(value)
     }

@@ -92,122 +92,122 @@ mod tests {
     #[test]
     fn number() {
         let t = Times::new(1);
-        assert_eq!(false, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(!t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(true, t.is_done());
+        assert!(t.is_ready());
+        assert!(t.is_done());
     }
 
     #[test]
     fn range() {
         let t = Times::new(1..3);
-        assert_eq!(false, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(!t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(true, t.is_done());
+        assert!(t.is_ready());
+        assert!(t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(true, t.is_done());
+        assert!(t.is_ready());
+        assert!(t.is_done());
     }
 
     #[test]
     fn range_from() {
         let t = Times::new(2..);
-        assert_eq!(false, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(!t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(false, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(!t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
     }
 
     #[test]
     fn range_full() {
         let t = Times::new(..);
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
     }
 
     #[test]
     fn range_inclusive() {
         let t = Times::new(2..=3);
-        assert_eq!(false, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(!t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(false, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(!t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(true, t.is_done());
+        assert!(t.is_ready());
+        assert!(t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(true, t.is_done());
+        assert!(t.is_ready());
+        assert!(t.is_done());
     }
 
     #[test]
     fn range_to() {
         let t = Times::new(..3);
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(true, t.is_done());
+        assert!(t.is_ready());
+        assert!(t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(true, t.is_done());
+        assert!(t.is_ready());
+        assert!(t.is_done());
     }
 
     #[test]
     fn range_to_inclusive() {
         let t = Times::new(..=3);
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(true, t.is_done());
+        assert!(t.is_ready());
+        assert!(t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(true, t.is_done());
+        assert!(t.is_ready());
+        assert!(t.is_done());
     }
 
     #[test]
     fn range_zero_to_one() {
         let t = Times::new(0..=1);
-        assert_eq!(true, t.is_ready());
-        assert_eq!(false, t.is_done());
+        assert!(t.is_ready());
+        assert!(!t.is_done());
         t.increment();
-        assert_eq!(true, t.is_ready());
-        assert_eq!(true, t.is_done());
+        assert!(t.is_ready());
+        assert!(t.is_done());
     }
 }

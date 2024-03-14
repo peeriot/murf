@@ -1,6 +1,6 @@
 check:check:
   stage: check
-  image: rust:1.67.1
+  image: rust:1.76.0
   variables:
     GIT_CLEAN_FLAGS: -ffdx -e target/
     GIT_SUBMODULE_STRATEGY: recursive

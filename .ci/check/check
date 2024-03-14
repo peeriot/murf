@@ -42,6 +42,7 @@ for PACKAGE in $PACKAGES_TO_CHECK; do
 
     printf "\n\n--== Run Linter for $PACKAGE ==--\n\n"
     cargo clippy \
+        --all-targets \
         -- \
             --deny "warnings"
 

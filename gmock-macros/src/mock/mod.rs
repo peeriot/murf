@@ -17,8 +17,6 @@ use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::parse2;
 
-pub use parsed::TypeToMock;
-
 use mocked::Mocked;
 use parsed::Parsed;
 
