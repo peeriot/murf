@@ -1,0 +1,252 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT_DIR="$(dirname $0)"
+SCRIPT_NAME="$(basename $0)"
+PROJECT_ROOT="$PROJECT_ROOT"
+
+if [ -t 2 ]; then
+    RED=`tput setaf 1 || echo ""`
+    YELLOW=`tput setaf 3 || echo ""`
+    BOLD=`tput bold || echo ""`
+    RESET=`tput sgr0 || echo ""`
+fi
+
+warn() {
+    >&2 echo "${YELLOW}${BOLD}WARN${RESET}:  $@"
+}
+
+fail() {
+    >&2 echo "${RED}${BOLD}ERROR${RESET}: $@"
+    exit 1
+}
+
+printHelp() {
+    cat << EOF | fold -s -w $(tput cols)
+This is a simple script to update or check the licenses used of the different
+dependencies of a project.
+
+The general idea is that we use the \`License.lock\` file to create an appoved
+list of licences that is then checked by a suitable CI pipeline.
+
+Usage:
+    $SCRIPT_NAME [command]
+
+    Commands:
+        update              Extract the license information from the current
+                            dependencies and store them in the \`License.lock\`
+                            file.
+
+                            During the update the list of whitelisted and blacklisted
+                            licenses is checked. The dependency must have at least
+                            one license from the whilelist and must not have a
+                            license from the blacklist.
+
+                            Also a warning will be raised if the licenses of a crate
+                            have been changed (this normally means that the license
+                            situation of a crate has changed or will change in the
+                            future).
+
+        check               Check if the license information of the current dependencies
+                            matches the expected information from the \`License.lock\`
+                            file.
+
+        help                Print this help.
+
+    Environment Variables:
+        LICENSES_WHITELIST  List of allowed licenses (currently $LICENSES_WHITELIST)
+        LICENSES_BLACKLIST  List of forbidden licenses (currently $LICENSES_BLACKLIST)
+        IGNORE              List of crates that are ignored during the check (Currently $IGNORE)
+        MANIFEST_PATH       Path of the \`Cargo.toml\` file (currenty $MANIFEST_PATH)
+        LICENSE_LOCK_PATH   Path of the \`License.lock\` file (currenty $LICENSE_LOCK_PATH)
+        TARGET_DIR          path of the target directory (currenty $TARGET_DIR)
+EOF
+}
+
+isWhitelisted() {
+    local LICENSE
+
+    for LICENSE in $LICENSES_WHITELIST; do
+        if [ "$1" == "$LICENSE" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+isBlacklisted() {
+    local LICENSE
+
+    for LICENSE in $LICENSES_BLACKLIST; do
+        if [ "$1" == "$LICENSE" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+isIgnored() {
+    local CRATE
+
+    if [[ "$1" == ppnp-* ]]; then
+        return 0
+    fi
+
+    for CRATE in $IGNORE; do
+        if [ "$1" == "$CRATE" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+loadCurrentLicences() {
+    cargo license \
+        --gitlab \
+        --all-features \
+        --manifest-path "$MANIFEST_PATH" \
+        | jq '{
+            licenses: .licenses
+                | sort_by(.id),
+            dependencies: .dependencies
+                | group_by(.name)
+                | map({
+                    name: .[0].name,
+                    versions: map(.version)
+                        | unique
+                        | sort,
+                    licenses: map(.licenses[])
+                        | unique
+                        | sort
+                })
+                | sort_by(.name)
+        }' \
+        > "$TMP_LOCK_PATH"
+
+    cat "$TMP_LOCK_PATH" | jq -cr '.dependencies[] | @sh "NAME=\(.name) LICENSES=(\(.licenses))"'
+}
+
+loadKnownLicenses() {
+    while read -r ITEM; do
+        eval "$ITEM"
+
+        KNOWN_LICENSES[$NAME]=$LICENSES
+    done < <(cat "$LICENSE_LOCK_PATH" | jq -cr '.dependencies[] | @sh "NAME=\(.name) LICENSES=\(.licenses | join(","))"')
+}
+
+checkLicences() {
+    local NAME="$1"
+    shift
+    local LICENSE;
+    local LICENSES=("$@")
+    local TMP="false"
+
+    for LICENSE in "${LICENSES[@]}"; do
+        if isBlacklisted "$LICENSE"; then
+            fail "$BOLD$NAME$RESET has a blacklisted license: $LICENSE"
+        fi
+
+        if isWhitelisted "$LICENSE"; then
+            TMP="true"
+        fi
+    done
+
+    if ! $TMP; then
+        fail "$BOLD$NAME$RESET does not have a whitelisted license: ${LICENSES[@]}"
+    fi
+}
+
+
+# Find the project root if it was not already set
+if [ -z "$PROJECT_ROOT" ]; then
+    PROJECT_ROOT="$(readlink -f "$SCRIPT_DIR")"
+    while [ ! -f "$PROJECT_ROOT/Cargo.lock" ]; do
+        PROJECT_ROOT="$(readlink -f "$PROJECT_ROOT/..")"
+
+        if [ -z "$PROJECT_ROOT" ]; then
+            fail "Unable to find project root"
+        fi
+    done
+fi
+
+# Get and check the needed paths
+MANIFEST_PATH="${MANIFEST_PATH:-$PROJECT_ROOT/Cargo.toml}"
+LICENSE_LOCK_PATH="${LICENSE_LOCK_PATH:-$PROJECT_ROOT/License.lock}"
+TARGET_DIR="${CARGO_TARGET_DIR:-$PROJECT_ROOT/target}"
+TMP_LOCK_PATH="$TARGET_DIR/License.lock"
+
+if [ ! -f "$MANIFEST_PATH" ]; then
+    fail "Project manifest was not found at '$MANIFEST_PATH'"
+fi
+
+# Handle the command
+case "$1" in
+    update)
+        mkdir -p "$TARGET_DIR"
+
+        declare -A KNOWN_LICENSES
+        if [ -f "$LICENSE_LOCK_PATH" ]; then
+            loadKnownLicenses
+        fi
+
+        # Check the licenses of the
+        while read -r ITEM; do
+            eval "$ITEM"
+
+            if isIgnored "$NAME"; then
+                continue
+            fi
+
+            checkLicences "$NAME" "${LICENSES[@]}"
+
+            ACTUAL=$(IFS=','; printf "%s" "${LICENSES[*]}")
+            EXPECTED="${KNOWN_LICENSES[$NAME]:-unknown}"
+            if [ "$ACTUAL" != "$EXPECTED"  ]; then
+                warn "Licenses for $BOLD$NAME$RESET were unknown or have changed (new=$ACTUAL, old=$EXPECTED)!"
+            fi
+        done < <(loadCurrentLicences)
+
+        mv "$TMP_LOCK_PATH" "$LICENSE_LOCK_PATH"
+        ;;
+
+    check)
+        # Check if License.lock exsists
+        if [ ! -f "$LICENSE_LOCK_PATH" ]; then
+            fail "License lock file was not found at '$LICENSE_LOCK_PATH'"
+        fi
+
+        # Collect the licenses from License.lock
+        declare -A KNOWN_LICENSES
+        loadKnownLicenses
+
+        # Check the actual licenses
+        while read -r ITEM; do
+            eval "$ITEM"
+
+            if isIgnored "$NAME"; then
+                continue
+            fi
+
+            checkLicences "$NAME" "${LICENSES[@]}"
+
+            ACTUAL=$(IFS=','; printf "%s" "${LICENSES[*]}")
+            EXPECTED="${KNOWN_LICENSES[$NAME]:-unknown}"
+            if [ "$ACTUAL" != "$EXPECTED"  ]; then
+                fail "Licenses for $BOLD$NAME$RESET are unknown or have changed ($ACTUAL != $EXPECTED)!"
+            fi
+        done < <(loadCurrentLicences)
+        ;;
+
+    help|-h|-?|--help)
+        printHelp
+        exit 0
+        ;;
+
+    *)
+        fail "Unknown command: '$1'"
+        ;;
+esac
