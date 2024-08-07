@@ -1,0 +1,234 @@
+#!/bin/sh
+
+set -e
+
+# Whether to check the code format or not
+RUN_CARGO_FMT=${RUN_CARGO_FMT:-true}
+
+# Globally enable or disable cargo clippy execution
+RUN_CARGO_CLIPPY=${RUN_CARGO_CLIPPY:-true}
+
+# Globally enable or disable cargo doc execution
+RUN_CARGO_DOC=${RUN_CARGO_DOC:-true}
+
+# Globally enable or disable cargo test execution
+RUN_CARGO_TEST=${RUN_CARGO_TEST:-true}
+
+# Globaly enable or disable cargo test execution with code coverage
+RUN_CARGO_TEST_WITH_COVERAGE=${RUN_CARGO_TEST_WITH_COVERAGE:-true}
+
+# Globale enable or disable code coverage report generation
+GENERATE_COVERAGE_REPORT=${GENERATE_COVERAGE_REPORT:-false}
+
+
+PROJECT_ROOT="${PROJECT_ROOT:?"Environment variable is unset!"}"
+COVERAGE_DIR="${COVERAGE_DIR:?"Environment variable is unset!"}"
+
+OLD_PWD="$PWD"
+
+finish() {
+    cd "$OLD_PWD"
+}
+
+trap finish EXIT
+
+cd "$PROJECT_ROOT"
+
+printf "\n\n--== Build Environment ==--\n\n"
+rustc \
+    --version
+cargo \
+    --version
+
+parsePackgeTuple() {
+    OLDIFS=$IFS;
+    IFS=',';
+    set -- $1;
+    IFS=$OLDIFS
+
+    PACKAGE="$1"
+    DO_RUN_CARGO_CLIPPY="$2"
+    DO_RUN_CARGO_DOC="$3"
+    DO_RUN_CARGO_TEST="$4"
+    EXPECTED_COVERAGE="$5"
+}
+
+# Run cargo fmt
+if [ "$RUN_CARGO_FMT" = "true" ]; then
+    printf "\n\n--== Check Code Style ==--\n\n"
+    cargo fmt \
+        --all \
+        -- \
+            --check
+fi
+
+# Run cargo clippy
+if [ "$RUN_CARGO_CLIPPY" = "true" ]; then
+    for ARGS in $PACKAGES; do
+        parsePackgeTuple "$ARGS"
+
+        if [ "$DO_RUN_CARGO_CLIPPY" = "false" ]; then
+            continue
+        fi
+
+        cd "$PROJECT_ROOT/$PACKAGE"
+
+        printf "\n\n--== Run Linter for $PACKAGE ==--\n\n"
+
+        cargo clippy \
+            --all-targets \
+            $CARGO_EXTRA_ARGS \
+            -- \
+                --deny "warnings"
+    done
+fi
+
+# Run cargo doc
+if [ "$RUN_CARGO_DOC" = "true" ]; then
+    for ARGS in $PACKAGES; do
+        parsePackgeTuple "$ARGS"
+
+        if [ "$DO_RUN_CARGO_DOC" = "false" ]; then
+            continue
+        fi
+
+        cd "$PROJECT_ROOT/$PACKAGE"
+
+        printf "\n\n--== Check Doc for $PACKAGE ==--\n\n"
+
+        RUSTDOCFLAGS="-D warnings" \
+        cargo doc \
+            --no-deps \
+            $CARGO_EXTRA_ARGS \
+            --document-private-items
+    done
+fi
+
+# Run cargo test
+for ARGS in $PACKAGES; do
+    parsePackgeTuple "$ARGS"
+
+    if [ "$RUN_CARGO_TEST" = "false" ]; then
+        DO_RUN_CARGO_TEST="false"
+    fi
+
+    if [ "$RUN_CARGO_TEST_WITH_COVERAGE" = "false" ]; then
+        EXPECTED_COVERAGE=""
+    fi
+
+    cd "$PROJECT_ROOT/$PACKAGE"
+
+    if [ -n "$EXPECTED_COVERAGE" ]; then
+        printf "\n\n--== Unit Tests (With Coverage) for $PACKAGE ==--\n\n"
+
+        TMP_COVERAGE_DIR="$COVERAGE_DIR/$PACKAGE"
+        TMP_DOCTESTBINS_DIR="$TMP_COVERAGE_DIR/doctestbins"
+
+        rm -rf "$TMP_COVERAGE_DIR"
+        mkdir -p "$TMP_COVERAGE_DIR"
+
+        rm -rf "$TMP_DOCTESTBINS_DIR"
+        mkdir -p "$TMP_DOCTESTBINS_DIR"
+
+        # Execute the tests
+        if [ "$INCLUDE_DOC_TESTS" = "true" ]; then
+            CARGO="cargo +nightly"
+
+            LLVM_PROFILE_FILE="$TMP_COVERAGE_DIR/default_%m_%p.profraw" \
+            RUSTFLAGS="-D warnings -C instrument-coverage" \
+            RUSTDOCFLAGS="-D warnings -C instrument-coverage -Z unstable-options --persist-doctests $TMP_DOCTESTBINS_DIR" \
+                $CARGO test \
+                    $CARGO_EXTRA_ARGS
+        else
+            CARGO="cargo"
+
+            LLVM_PROFILE_FILE="$TMP_COVERAGE_DIR/default_%m_%p.profraw" \
+            RUSTFLAGS="-D warnings -C instrument-coverage" \
+                $CARGO test \
+                    $CARGO_EXTRA_ARGS
+        fi
+
+        # Merge profdata
+        $CARGO profdata -- \
+            merge \
+                -sparse "$TMP_COVERAGE_DIR"/default_*.profraw \
+                -o "$TMP_COVERAGE_DIR/merged.profdata"
+
+        # Get all binary artifacts
+        FILES_TESTS=$( \
+            RUSTFLAGS="-D warnings -C instrument-coverage" \
+                $CARGO test $CARGO_EXTRA_ARGS --tests --no-run --message-format=json \
+                    | jq -r "select(.profile.test == true) | .filenames[]" \
+                    | grep -v dSYM - \
+        )
+        FILES_DOC_TESTS=$(find "$TMP_DOCTESTBINS_DIR" -type f)
+        FILES="$FILES_TESTS $FILES_DOC_TESTS"
+
+        # Generate the report
+        IGNORE=$(find "$PROJECT_ROOT" -mindepth 1 -maxdepth 1 -type d -not -name "$PACKAGE")
+        $CARGO cov -- \
+            report \
+                --use-color \
+                --show-branch-summary=false \
+                --ignore-filename-regex='rustc/' \
+                --ignore-filename-regex='cargo/git' \
+                --ignore-filename-regex='cargo/registry' \
+                --ignore-filename-regex="$PROJECT_ROOT/$PACKAGE/tests" \
+                $( for DIR in $IGNORE; do printf " %s=%s/" --ignore-filename-regex $DIR; done ) \
+                --instr-profile="$TMP_COVERAGE_DIR/merged.profdata" \
+                $( for FILE in $FILES; do printf " %s %s" -object $FILE; done )
+
+        # Generate HTML report
+        if [ "$GENERATE_COVERAGE_REPORT" = "true" ]; then
+            $CARGO cov -- \
+                show \
+                    --use-color \
+                    --format=html \
+                    --Xdemangler=rustfilt \
+                    --show-instantiations=false \
+                    --show-directory-coverage \
+                    --show-line-counts-or-regions \
+                    --ignore-filename-regex='rustc/' \
+                    --ignore-filename-regex='cargo/git' \
+                    --ignore-filename-regex='cargo/registry' \
+                    --ignore-filename-regex='tests/' \
+                    --output-dir="$TMP_COVERAGE_DIR/report" \
+                    $( for DIR in $IGNORE; do printf " %s=%s/" --ignore-filename-regex $DIR; done ) \
+                    --instr-profile="$TMP_COVERAGE_DIR/merged.profdata" \
+                    $( for FILE in $FILES; do printf "%s %s " -object $FILE; done )
+                2> /dev/null
+        fi
+
+        # Export coverage data
+        $CARGO cov -- \
+            export \
+                --format=text \
+                --summary-only \
+                --ignore-filename-regex='rustc/' \
+                --ignore-filename-regex='cargo/git' \
+                --ignore-filename-regex='cargo/registry' \
+                --ignore-filename-regex="$PROJECT_ROOT/$PACKAGE/tests" \
+                $( for DIR in $IGNORE; do printf " %s=%s/" --ignore-filename-regex $DIR; done ) \
+                --instr-profile="$TMP_COVERAGE_DIR/merged.profdata" \
+                $( for FILE in $FILES; do printf " %s %s" -object $FILE; done ) \
+                > "$TMP_COVERAGE_DIR/coverage.json" \
+                2> /dev/null
+        COVERAGE_PERCENTAGE=$(cat "$TMP_COVERAGE_DIR/coverage.json" \
+            | jq '.data[0].totals.regions.percent')
+
+        # Check test coverage
+        if [ $(echo "$COVERAGE_PERCENTAGE < $EXPECTED_COVERAGE" | bc -l) = 1 ]; then
+            echo ""
+            echo "Test coverage for '$PACKAGE' is not fulfilled"
+            echo "    actual coverage:   $COVERAGE_PERCENTAGE %"
+            echo "    expected coverage: $EXPECTED_COVERAGE %"
+            exit 1
+        fi
+    elif [ "$DO_RUN_CARGO_TEST" = "true" ]; then
+        printf "\n\n--== Unit Tests for $PACKAGE ==--\n\n"
+
+        RUSTFLAGS="-D warnings" \
+        cargo test \
+            $CARGO_EXTRA_ARGS
+    fi
+done
