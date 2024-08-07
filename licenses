@@ -183,6 +183,8 @@ if [ ! -f "$MANIFEST_PATH" ]; then
     fail "Project manifest was not found at '$MANIFEST_PATH'"
 fi
 
+mkdir -p "$TARGET_DIR"
+
 # Handle the command
 case "$1" in
     update)
