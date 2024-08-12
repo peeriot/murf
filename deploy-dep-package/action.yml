@@ -1,0 +1,30 @@
+name: 'Deploy DEB Package'
+inputs:
+  host:
+    description: 'Host to deploy the packages to'
+    required: true
+  repo:
+    description: 'Repository to add the packages to'
+    required: true
+  codename:
+    description: 'Codename to upload the package to'
+    default: 'stable'
+    required: false
+  packages:
+    description: 'List of packages to deploy'
+    required: true
+  package_dir:
+    description: 'Directory the packages are stored on the host'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Deploy DEB Package
+      shell: bash
+      run: ${{ github.action_path }}/exec.sh
+      env:
+        DEPLOY_DEB_HOST: ${{ inputs.host }}
+        DEPLOY_DEB_REPO: ${{ inputs.repo }}
+        DEPLOY_DEB_CODENAME: ${{ inputs.codename }}
+        DEPLOY_DEB_PACKAGES: ${{ inputs.packages }}
+        DEPLOY_DEB_PACKAGE_DIR: ${{ inputs.package_dir }}
