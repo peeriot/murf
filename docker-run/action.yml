@@ -37,10 +37,6 @@ inputs:
     description: 'Add gitlab.com to the list of known hosts'
     required: false
     default: true
-  test:
-    description: 'FUU'
-    required: false
-    default: true
   ssh_keys:
     description: 'List of base64 encoded keys to add to the SSH agent'
     required: false
