@@ -1,29 +1,58 @@
 #!/bin/bash
 
+set -e
+
+SCRIPT="true"
+EXTRA_ARGS=()
+
 # Login to docker registry
-if [ ! -z $INPUT_USERNAME ]; then
-    echo "$INPUT_PASSWORD" | docker login "$INPUT_REGISTRY" -u "$INPUT_USERNAME" --password-stdin
+if [ ! -z $DOCKER_RUN_USERNAME ]; then
+    echo "$DOCKER_RUN_PASSWORD" | docker login "$DOCKER_RUN_REGISTRY" -u "$DOCKER_RUN_USERNAME" --password-stdin
 fi
 
 # Join the specified docker network
-if [ ! -z $INPUT_DOCKER_NETWORK ]; then
-    INPUT_OPTIONS="$INPUT_OPTIONS --network $INPUT_DOCKER_NETWORK"
+if [ ! -z $DOCKER_RUN_DOCKER_NETWORK ]; then
+    DOCKER_RUN_OPTIONS="$DOCKER_RUN_OPTIONS --network $DOCKER_RUN_DOCKER_NETWORK"
 fi
 
 # Use the specified user
-if [ ! -z $INPUT_USER ]; then
-    USER_DIR="$RUNNER_TEMP/_home_$INPUT_USER"
+if [ ! -z $DOCKER_RUN_USER ]; then
+    USER_DIR="$RUNNER_TEMP/_home_$DOCKER_RUN_USER"
+
+    USER_ID=$(id -u)
+    GROUP_ID=$(id -g)
 
     mkdir -p "$USER_DIR"
+    chown -R $USER_ID:$GROUP_ID "$USER_DIR"
 
-    USER_ARGS=( \
-        --user $(id -u):$(id -g) \
-        -v "$USER_DIR":"/home/$INPUT_USER" \
+    EXTRA_ARGS=( \
+        --user $USER_ID:$GROUP_ID \
+        -v "$USER_DIR":"/home/$DOCKER_RUN_USER" \
     )
+
+    for GROUP in $(id -G); do
+        EXTRA_ARGS+=(--group-add "$GROUP")
+    done
+
+    SCRIPT="$SCRIPT; export HOME=/home/$DOCKER_RUN_USER"
+fi
+
+# Setup known hosts
+if [ "$DOCKER_RUN_SETUP_KNOWN_HOSTS" == "true" ]; then
+    SCRIPT="$SCRIPT; mkdir -p ~/.ssh; ssh-keyscan -H github.com >> ~/.ssh/known_hosts"
+fi
+
+# Parse passed keys
+if [ ! -z "$DOCKER_RUN_SSH_KEYS" ]; then
+    SCRIPT="$SCRIPT; eval \"\$(ssh-agent -s)\""
+    while IFS= read -r KEY; do
+        if [ ! -z "$KEY" ]; then
+            SCRIPT="$SCRIPT; echo \"$KEY\" | base64 -d | ssh-add -"
+        fi
+    done <<< "$DOCKER_RUN_SSH_KEYS"
 fi
 
 # Parse the passed volumes
-VOLUMES=()
 while IFS= read -r VOLUME; do
     IFS=":" read -ra PARTS <<< "$VOLUME"
 
@@ -42,18 +71,24 @@ while IFS= read -r VOLUME; do
         echo "Reuse existing docker volume: $VOLUME_NAME"
     fi
 
-    VOLUMES+=(-v "$VOLUME_NAME":"$VOLUME_PATH")
-done <<< "$INPUT_VOLUMES"
+    EXTRA_ARGS+=(-v "$VOLUME_NAME":"$VOLUME_PATH")
+done <<< "$DOCKER_RUN_VOLUMES"
+
+# Set environment variables
+for ENV in $(export -p | cut -d' ' -f3 | cut -d'=' -f1 | grep -vE '^(OLDPWD|PATH|PWD|SHL|HOME|HOSTNAME|INPUT_.*|DOCKER_RUN_.*)$'); do
+    EXTRA_ARGS+=(-e "$ENV")
+done
 
 # Bring up the container and execute the requested command
+SCRIPT="$SCRIPT; $DOCKER_RUN_RUN"
+
 exec docker run \
     --rm \
-    ${VOLUMES[@]} \
-    ${USER_ARGS[@]} \
+    ${EXTRA_ARGS[@]} \
     -v "/var/run/docker.sock":"/var/run/docker.sock" \
     -v "$GITHUB_WORKSPACE":"/github/workspace" \
     --workdir /github/workspace \
-    $INPUT_OPTIONS \
-    --entrypoint="$INPUT_SHELL" \
-    "$INPUT_IMAGE" \
-        -c "${INPUT_RUN//$'\n'/;}"
+    $DOCKER_RUN_OPTIONS \
+    --entrypoint="$DOCKER_RUN_SHELL" \
+    "$DOCKER_RUN_IMAGE" \
+        -c "$SCRIPT"

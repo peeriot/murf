@@ -33,6 +33,13 @@ inputs:
   volumes:
     description: 'Volumes that should be used for the container'
     required: false
+  setup_known_hosts:
+    description: 'Add gitlab.com to the list of known hosts'
+    required: false
+    default: true
+  ssh_keys:
+    description: 'List of base64 encoded keys to add to the SSH agent'
+    required: false
 runs:
   using: 'composite'
   steps:
@@ -40,13 +47,15 @@ runs:
       shell: bash
       run: ${{ github.action_path }}/exec.sh
       env:
-        INPUT_IMAGE: ${{ inputs.image }}
-        INPUT_USER: ${{ inputs.user }}
-        INPUT_OPTIONS: ${{ inputs.options }}
-        INPUT_RUN: ${{ inputs.run }}
-        INPUT_SHELL: ${{ inputs.shell }}
-        INPUT_REGISTRY: ${{ inputs.registry }}
-        INPUT_USERNAME: ${{ inputs.username }}
-        INPUT_PASSWORD: ${{ inputs.password }}
-        INPUT_DOCKER_NETWORK: ${{ inputs.docker_network }}
-        INPUT_VOLUMES: ${{ inputs.volumes }}
+        DOCKER_RUN_IMAGE: ${{ inputs.image }}
+        DOCKER_RUN_USER: ${{ inputs.user }}
+        DOCKER_RUN_OPTIONS: ${{ inputs.options }}
+        DOCKER_RUN_RUN: ${{ inputs.run }}
+        DOCKER_RUN_SHELL: ${{ inputs.shell }}
+        DOCKER_RUN_REGISTRY: ${{ inputs.registry }}
+        DOCKER_RUN_USERNAME: ${{ inputs.username }}
+        DOCKER_RUN_PASSWORD: ${{ inputs.password }}
+        DOCKER_RUN_DOCKER_NETWORK: ${{ inputs.docker_network }}
+        DOCKER_RUN_VOLUMES: ${{ inputs.volumes }}
+        DOCKER_RUN_SSH_KEYS: ${{ inputs.ssh_keys }}
+        DOCKER_RUN_SETUP_KNOWN_HOSTS: ${{ inputs.setup_known_hosts }}
