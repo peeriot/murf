@@ -20,6 +20,7 @@ inputs:
   registry:
     description: 'Registry'
     required: false
+    default: ghcr.io
   username:
     description: 'Username'
     required: false

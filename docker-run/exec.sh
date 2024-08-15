@@ -10,9 +10,12 @@ if [ ! -z $DOCKER_RUN_USERNAME ]; then
     echo "$DOCKER_RUN_PASSWORD" | docker login "$DOCKER_RUN_REGISTRY" -u "$DOCKER_RUN_USERNAME" --password-stdin
 fi
 
+# Pull the image
+docker pull "$DOCKER_RUN_IMAGE"
+
 # Join the specified docker network
 if [ ! -z $DOCKER_RUN_DOCKER_NETWORK ]; then
-    DOCKER_RUN_OPTIONS="$DOCKER_RUN_OPTIONS --network $DOCKER_RUN_DOCKER_NETWORK"
+    EXTRA_ARGS+=(--network "$DOCKER_RUN_DOCKER_NETWORK")
 fi
 
 # Use the specified user
@@ -25,7 +28,7 @@ if [ ! -z $DOCKER_RUN_USER ]; then
     mkdir -p "$USER_DIR"
     chown -R $USER_ID:$GROUP_ID "$USER_DIR"
 
-    EXTRA_ARGS=( \
+    EXTRA_ARGS+=( \
         --user $USER_ID:$GROUP_ID \
         -v "$USER_DIR":"/home/$DOCKER_RUN_USER" \
     )
@@ -88,7 +91,6 @@ exec docker run \
     -v "/var/run/docker.sock":"/var/run/docker.sock" \
     -v "$GITHUB_WORKSPACE":"/github/workspace" \
     --workdir /github/workspace \
-    $DOCKER_RUN_OPTIONS \
     --entrypoint="$DOCKER_RUN_SHELL" \
     "$DOCKER_RUN_IMAGE" \
         -c "$SCRIPT"
