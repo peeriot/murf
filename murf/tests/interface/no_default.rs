@@ -3,6 +3,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use futures::{task::noop_waker_ref, Stream};
+
 use murf::{action::Return, expect_method_call, mock};
 
 mock! {

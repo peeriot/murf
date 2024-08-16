@@ -3,6 +3,7 @@ use std::task::{Context, Poll};
 
 use futures::task::noop_waker_ref;
 use futures::Stream;
+
 use murf::{action::Return, expect_method_call, mock};
 
 mock! {
