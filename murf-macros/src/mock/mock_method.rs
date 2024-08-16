@@ -5,7 +5,7 @@ use crate::misc::{AttribsEx, FormattedString, IterEx, TypeEx};
 
 use super::context::{MethodContext, MethodContextData};
 
-pub struct MockMethod(ImplItemFn);
+pub struct MockMethod;
 
 impl MockMethod {
     pub fn render(context: &MethodContext, mut method: ImplItemFn) -> ImplItemFn {

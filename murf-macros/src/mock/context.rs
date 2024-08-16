@@ -32,8 +32,6 @@ pub struct ContextData {
     pub ga_state: Generics,
     pub ga_handle: Generics,
 
-    pub derive_send: bool,
-    pub derive_sync: bool,
     pub derive_clone: bool,
     pub derive_default: bool,
 
@@ -83,8 +81,6 @@ impl Context {
             ga_state,
             ga_handle,
 
-            derive_send,
-            derive_sync,
             derive_clone,
             derive_default,
 
@@ -112,7 +108,7 @@ pub struct ImplContext(Arc<ImplContextData>);
 impl ImplContext {
     pub fn new(context: Context, impl_: &ItemImpl) -> Self {
         let ga_impl = impl_.generics.clone();
-        let (impl_, lts_temp) = impl_.clone().split_off_temp_lifetimes();
+        let (impl_, _lts_temp) = impl_.clone().split_off_temp_lifetimes();
 
         let need_static_lt = impl_.items.iter().any(|i| {
             if let ImplItem::Fn(f) = i {
@@ -137,12 +133,7 @@ impl ImplContext {
         Self(Arc::new(ImplContextData {
             context,
 
-            need_static_lt,
-
-            impl_,
             trait_,
-
-            lts_temp,
 
             ga_impl,
             ga_impl_mock,
@@ -161,12 +152,7 @@ impl Deref for ImplContext {
 pub struct ImplContextData {
     pub context: Context,
 
-    pub need_static_lt: bool,
-
-    pub impl_: ItemImpl,
     pub trait_: Option<Path>,
-
-    pub lts_temp: TempLifetimes,
 
     pub ga_impl: Generics,
     pub ga_impl_mock: Generics,

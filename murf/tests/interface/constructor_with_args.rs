@@ -8,7 +8,7 @@ trait Fuu: Sized {
 
 mock! {
     #[derive(Default, Send, Sync)]
-    pub struct MyStruct(usize);
+    pub struct MyStruct;
 
     impl Fuu for MyStruct {
         fn new(x: usize) -> Result<Self, ()>;

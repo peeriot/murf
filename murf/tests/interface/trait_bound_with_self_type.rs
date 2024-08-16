@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use murf_macros::mock;
 
 pub trait Spawner<T> {

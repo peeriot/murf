@@ -233,5 +233,5 @@ impl Default for Inner {
 static SEQUENCE_ID: AtomicUsize = AtomicUsize::new(0);
 
 thread_local! {
-    static CURRENT_SEQUENCE: RefCell<Option<Arc<Mutex<Inner>>>> = RefCell::new(None);
+    static CURRENT_SEQUENCE: RefCell<Option<Arc<Mutex<Inner>>>> = const { RefCell::new(None) };
 }

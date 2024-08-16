@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use murf::{expect_method_call, mock};
 
 trait Fuu {

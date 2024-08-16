@@ -1,10 +1,7 @@
 use std::{cell::UnsafeCell, mem::transmute};
 
 use proc_macro2::{Ident, Span};
-use syn::{
-    punctuated::Punctuated, GenericArgument, Lifetime, Path, PathArguments, PathSegment,
-    ReturnType, Type, TypeParamBound, TypePath,
-};
+use syn::{GenericArgument, Lifetime, Path, PathArguments, ReturnType, Type, TypeParamBound};
 
 use super::TempLifetimes;
 
@@ -23,8 +20,6 @@ impl<'x> LifetimeReplaceMode<'x> {
 }
 
 pub trait TypeEx {
-    fn from_ident(ident: Ident) -> Self;
-
     fn contains_lifetime(&self, lt: &Lifetime) -> bool;
     fn contains_self_type(&self) -> bool;
 
@@ -35,19 +30,6 @@ pub trait TypeEx {
 }
 
 impl TypeEx for Type {
-    fn from_ident(ident: Ident) -> Self {
-        let mut path = Path {
-            leading_colon: None,
-            segments: Punctuated::default(),
-        };
-        path.segments.push(PathSegment {
-            ident,
-            arguments: PathArguments::None,
-        });
-
-        Self::Path(TypePath { qself: None, path })
-    }
-
     fn contains_lifetime(&self, lt: &Lifetime) -> bool {
         struct Visitor<'a> {
             lt: &'a Lifetime,
