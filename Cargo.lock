@@ -176,30 +176,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gmock"
-version = "0.1.0"
-dependencies = [
- "futures",
- "gmock-macros",
- "once_cell",
- "parking_lot",
- "parse_duration",
-]
-
-[[package]]
-name = "gmock-macros"
-version = "0.1.0"
-dependencies = [
- "convert_case",
- "lazy_static",
- "proc-macro2",
- "quote",
- "regex",
- "sha1",
- "syn",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -226,6 +202,30 @@ name = "memchr"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "523dc4f511e55ab87b694dc30d0f820d60906ef06413f93d4d7a1385599cc149"
+
+[[package]]
+name = "murf"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "murf-macros",
+ "once_cell",
+ "parking_lot",
+ "parse_duration",
+]
+
+[[package]]
+name = "murf-macros"
+version = "0.1.0"
+dependencies = [
+ "convert_case",
+ "lazy_static",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "sha1",
+ "syn",
+]
 
 [[package]]
 name = "num"
