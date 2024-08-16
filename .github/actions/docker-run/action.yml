@@ -1,0 +1,62 @@
+name: 'Docker Run'
+description: 'Run a command in a new container'
+inputs:
+  image:
+    description: 'Image'
+    required: true
+  user:
+    description: 'Run the container as the specified user'
+    required: false
+  options:
+    description: 'Options'
+    required: false
+  run:
+    description: 'Run command in container'
+    required: false
+  shell:
+    description: 'Use a specific shell'
+    required: false
+    default: sh
+  registry:
+    description: 'Registry'
+    required: false
+    default: ghcr.io
+  username:
+    description: 'Username'
+    required: false
+  password:
+    description: 'Password'
+    required: false
+  docker_network:
+    description: 'Docker Network ID'
+    default: ${{ job.container.network }}
+    required: false
+  volumes:
+    description: 'Volumes that should be used for the container'
+    required: false
+  setup_known_hosts:
+    description: 'Add gitlab.com to the list of known hosts'
+    required: false
+    default: true
+  ssh_keys:
+    description: 'List of base64 encoded keys to add to the SSH agent'
+    required: false
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Docker Container
+      shell: bash
+      run: ${{ github.action_path }}/exec.sh
+      env:
+        DOCKER_RUN_IMAGE: ${{ inputs.image }}
+        DOCKER_RUN_USER: ${{ inputs.user }}
+        DOCKER_RUN_OPTIONS: ${{ inputs.options }}
+        DOCKER_RUN_RUN: ${{ inputs.run }}
+        DOCKER_RUN_SHELL: ${{ inputs.shell }}
+        DOCKER_RUN_REGISTRY: ${{ inputs.registry }}
+        DOCKER_RUN_USERNAME: ${{ inputs.username }}
+        DOCKER_RUN_PASSWORD: ${{ inputs.password }}
+        DOCKER_RUN_DOCKER_NETWORK: ${{ inputs.docker_network }}
+        DOCKER_RUN_VOLUMES: ${{ inputs.volumes }}
+        DOCKER_RUN_SSH_KEYS: ${{ inputs.ssh_keys }}
+        DOCKER_RUN_SETUP_KNOWN_HOSTS: ${{ inputs.setup_known_hosts }}
