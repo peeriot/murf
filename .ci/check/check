@@ -2,60 +2,13 @@
 
 set -e
 
-SCRIPT_DIR="$(dirname $0)"
-PROJECT_ROOT="$(readlink -f "$SCRIPT_DIR/../..")"
-
-PACKAGES_TO_CHECK="
-    murf \
-    murf-macros \
+export PACKAGES=" \
+    murf,true,true,true,70.0 \
+    murf-macros,true,true,true \
 "
 
-PACKAGES_TO_TEST="
-    murf \
-    murf-macros \
-"
+export SCRIPT_DIR="$(dirname $0)"
+export PROJECT_ROOT="$(readlink -f "$SCRIPT_DIR/../..")"
+export COVERAGE_DIR="$PROJECT_ROOT/target/coverage"
 
-OLD_PWD="$PWD"
-
-finish() {
-    cd "$OLD_PWD"
-}
-
-trap finish EXIT
-
-cd "$PROJECT_ROOT"
-
-printf "\n\n--== Build Environment ==--\n\n"
-rustc \
-    --version
-cargo \
-    --version
-
-printf "\n\n--== Check Code Style ==--\n\n"
-cargo fmt \
-    --all \
-    -- \
-        --check
-
-for PACKAGE in $PACKAGES_TO_CHECK; do
-    cd "$PROJECT_ROOT/$PACKAGE"
-
-    printf "\n\n--== Run Linter for $PACKAGE ==--\n\n"
-    cargo clippy \
-        --all-targets \
-        -- \
-            --deny "warnings"
-
-    printf "\n\n--== Check Doc for $PACKAGE ==--\n\n"
-    RUSTDOCFLAGS="-Dwarnings" \
-    cargo doc \
-        --no-deps \
-        --document-private-items
-done
-
-for PACKAGE in $PACKAGES_TO_TEST; do
-    cd "$PROJECT_ROOT/$PACKAGE"
-
-    printf "\n\n--== Unit Tests for $PACKAGE ==--\n\n"
-    cargo test
-done
+"$PROJECT_ROOT/.github/actions/check"
