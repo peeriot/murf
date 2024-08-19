@@ -12,8 +12,8 @@ use syn::{
 };
 
 use crate::misc::{
-    format_expect_call, format_expect_module, format_expectations_field, AttribsEx, GenericsEx,
-    ItemImplEx, LifetimeReplaceMode, MethodEx, ReturnTypeEx, TempLifetimes, TypeEx,
+    format_expect_call, format_expect_module, format_expectations_field, ident_murf, AttribsEx,
+    GenericsEx, ItemImplEx, LifetimeReplaceMode, MethodEx, ReturnTypeEx, TempLifetimes, TypeEx,
 };
 
 use super::parsed::Parsed;
@@ -24,6 +24,7 @@ use super::parsed::Parsed;
 pub(crate) struct Context(Arc<ContextData>);
 
 pub(crate) struct ContextData {
+    pub ident_murf: Ident,
     pub ident_module: Ident,
     pub ident_mock: Ident,
     pub ident_handle: Ident,
@@ -44,6 +45,8 @@ pub(crate) struct ContextData {
 
 impl Context {
     pub(crate) fn new(parsed: &Parsed) -> Self {
+        let ident_murf = ident_murf();
+
         let ident = parsed.ty.ident().to_string();
         let ident_mock = format_ident!("{}Mock", ident);
         let ident_handle = format_ident!("{}Handle", ident);
@@ -73,6 +76,7 @@ impl Context {
         let extern_mock_lifetime = ga_state.lifetimes().any(|lt| lt.lifetime.ident == "mock");
 
         Self(Arc::new(ContextData {
+            ident_murf,
             ident_module,
             ident_mock,
             ident_handle,

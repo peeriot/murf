@@ -72,7 +72,7 @@ pub fn expect_call(input: TokenStream) -> TokenStream {
 }
 
 /// Helper macro to define an call expectation of a specific method. Same as
-/// [`expect_call`] but will automatically add a `any` matcher for the `self`
+/// [`expect_call!`] but will automatically add a `any` matcher for the `self`
 /// argument.
 ///
 /// # Example

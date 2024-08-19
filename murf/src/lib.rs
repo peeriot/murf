@@ -19,6 +19,9 @@ pub mod sequence;
 pub mod times;
 pub mod types;
 
+#[cfg(doc)]
+pub mod example;
+
 pub use murf_macros::{expect_call, expect_method_call, mock};
 pub use once_cell::sync::Lazy;
 

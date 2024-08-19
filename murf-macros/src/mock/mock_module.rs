@@ -115,6 +115,7 @@ impl ToTokens for MockModule {
         } = self;
 
         let ContextData {
+            ident_murf,
             ident_module,
             ident_mock,
             ident_handle,
@@ -126,27 +127,20 @@ impl ToTokens for MockModule {
             pub use #ident_module::Handle as #ident_handle;
             pub use #ident_module::{Mockable as _, MockableDefault as _};
 
-            mod #ident_module {
+            /// Implements the different mocked types for the type the [`mock!`](crate::mock)
+            /// macro was executed on.
+            pub mod #ident_module {
                 use std::any::type_name;
-                use std::fmt::Write;
+                use std::fmt::{Write, Debug, Formatter, Result as FmtResult};
                 use std::marker::PhantomData;
                 use std::mem::take;
                 use std::sync::{Arc, Weak};
 
                 use parking_lot::Mutex;
-                use murf::{Lazy, Expectation};
+                use #ident_murf :: {Lazy, Expectation};
 
+                #[allow(clippy::wildcard_imports)]
                 use super::*;
-
-                pub trait IntoState {
-                    type State;
-
-                    fn into_state(self) -> Self::State;
-                }
-
-                pub trait FromState<TState, TShared> {
-                    fn from_state(state: TState, shared: TShared) -> Self;
-                }
 
                 #mock
                 #mockable

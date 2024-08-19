@@ -42,14 +42,18 @@ impl ToTokens for ExpectationModule {
         } = self;
 
         let MethodContextData {
+            trait_,
+            ident_method,
             is_associated,
             ident_expectation_module,
             ..
         } = &**context;
 
+        let ident_murf = &context.ident_murf;
+
         let associated_expectations = if *is_associated {
             Some(quote! {
-                pub static EXPECTATIONS: Lazy<Mutex<Vec<Weak<Mutex<Box<dyn murf::Expectation + Send + Sync + 'static>>>>>> = Lazy::new(|| Default::default());
+                pub static EXPECTATIONS: Lazy<Mutex<Vec<Weak<Mutex<Box<dyn #ident_murf :: Expectation + Send + Sync + 'static>>>>>> = Lazy::new(|| Default::default());
 
                 pub fn cleanup_associated_expectations() {
                     EXPECTATIONS.lock().retain_mut(|ex| ex.strong_count() > 0);
@@ -59,16 +63,26 @@ impl ToTokens for ExpectationModule {
             None
         };
 
+        let type_ = if let Some(trait_) = trait_ {
+            trait_.into_token_stream().to_string()
+        } else {
+            context.ident_state.to_string()
+        };
+
+        let doc = format!("Module that defines the expectation types for [`{type_}::{ident_method}`]({type_}::{ident_method}");
+
         tokens.extend(quote! {
+            #[doc = #doc]
             pub mod #ident_expectation_module {
                 use std::marker::PhantomData;
                 use std::fmt::{Display, Formatter, Result as FmtResult};
 
-                use murf::{
+                use #ident_murf :: {
                     Matcher, Times, TimesRange, Sequence, SequenceHandle, InSequence,
                     action::{Action, RepeatableAction, OnetimeAction, RepeatedAction},
                 };
 
+                #[allow(clippy::wildcard_imports)]
                 use super::*;
 
                 #expectation
@@ -76,7 +90,8 @@ impl ToTokens for ExpectationModule {
 
                 #associated_expectations
 
-                pub static TYPE_ID: Lazy<usize> = Lazy::new(|| murf::next_type_id());
+                /// Unique ID that represents this type of expectation.
+                pub static TYPE_ID: Lazy<usize> = Lazy::new(#ident_murf :: next_type_id);
             }
         });
     }

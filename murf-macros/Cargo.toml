@@ -20,6 +20,7 @@ debug-to-file = []
 [dependencies]
 convert_case = "0.6"
 lazy_static = "1.4"
+proc-macro-crate = "3.1"
 proc-macro2 = {  version = "1.0", features = [ "span-locations" ] }
 quote = "1.0"
 regex = "1.7"

@@ -29,6 +29,7 @@ impl Mock {
 }
 
 impl ToTokens for Mock {
+    #[allow(clippy::too_many_lines)]
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let Self { context, impls } = self;
 
@@ -63,7 +64,12 @@ impl ToTokens for Mock {
         let mock_default_impl = derive_default.then(|| {
             quote! {
                 impl #ga_mock_impl Mock #ga_mock_types #ga_mock_where {
+                    /// Create a new empty mock object.
+                    ///
+                    /// This method is only generated if the object to mock implements
+                    /// the `Default` trait.
                     pub fn new() -> Self {
+                        #[allow(clippy::default_trait_access)]
                         Self::from_state(Default::default())
                     }
                 }
@@ -96,25 +102,38 @@ impl ToTokens for Mock {
         });
 
         tokens.extend(quote! {
+            /// Mocked version of the type the [`mock!`](crate::mock) macro was executed on.
+            #[must_use]
             pub struct Mock #ga_mock_impl #ga_mock_where {
+                /// The state is the object that the [`mock!`](crate::mock) macro was executed on.
+                /// It is used to execute actual calls to the mocked version of the different methods
+                /// of the object.
                 pub state: #ident_state #ga_state_types,
+
+                /// Shared state that is used across the different helper objects of one mocked object.
                 pub (super) shared: Arc<Mutex<Shared #ga_mock_types>>,
+
+                /// Handle of the current mock object.
                 pub (super) handle: Option<Handle #ga_handle_types>
             }
 
             impl #ga_mock_impl Mock #ga_mock_types #ga_mock_where {
+                /// Create a new [`Mock`] instance from the passed `state` object.
                 pub fn from_state(state: #ident_state #ga_state_types) -> Self {
                     let handle = Handle::new();
                     let shared = handle.shared.clone();
-                    let mock = Self {
+
+                    Self {
                         state,
                         shared,
                         handle: Some(handle),
-                    };
-
-                    mock
+                    }
                 }
 
+                /// Get a reference to the handle of this mock object.
+                ///
+                /// # Panics
+                /// May panic if the current mock object does not contain a handle anymore.
                 pub fn mock_handle(&self) -> &Handle #ga_handle_types {
                     if let Some(handle) = &self.handle {
                         handle
@@ -123,12 +142,21 @@ impl ToTokens for Mock {
                     }
                 }
 
+                /// Split the current mock object into its handle and a mock object
+                /// without a handle.
+                ///
+                /// # Panics
+                /// May panic if the current mock object does not contain a handle anymore.
                 pub fn mock_split(mut self) -> (Handle #ga_handle_types, Self) {
                     let handle = self.mock_take_handle();
 
                     (handle, self)
                 }
 
+                /// Extract the handle from the current mock object.
+                ///
+                /// # Panics
+                /// May panic if the current mock object does not contain a handle anymore.
                 pub fn mock_take_handle(&mut self) -> Handle #ga_handle_types {
                     if let Some(handle) = self.handle.take() {
                         handle
@@ -137,8 +165,21 @@ impl ToTokens for Mock {
                     }
                 }
 
+                /// Release the handle of this mock object. See [`release`](Handle::release()) for details.
+                ///
+                /// # Panics
+                /// May panic if the current mock object does not contain a handle anymore.
                 pub fn mock_release_handle(&mut self) {
                     self.mock_take_handle().release();
+                }
+            }
+
+            impl #ga_mock_impl Debug for Mock #ga_mock_types #ga_mock_where {
+                fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+                    f.debug_struct("Mock")
+                        .field("shared", &self.shared)
+                        .field("handle", &self.handle)
+                        .finish_non_exhaustive()
                 }
             }
 

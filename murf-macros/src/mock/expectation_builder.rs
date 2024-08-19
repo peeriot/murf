@@ -43,6 +43,7 @@ impl ToTokens for ExpectationBuilder {
         } = &**context;
 
         let ContextData {
+            ident_murf,
             trait_send,
             trait_sync,
             ga_handle,
@@ -67,11 +68,11 @@ impl ToTokens for ExpectationBuilder {
 
         let drop_handler = if *is_associated {
             quote! {
-                let expectation: Box<dyn murf::Expectation + Send + Sync + 'static> = Box::new(expectation);
+                let expectation: Box<dyn #ident_murf :: Expectation + Send + Sync + 'static> = Box::new(expectation);
                 let expectation = Arc::new(Mutex::new(expectation));
                 let weak = Arc::downgrade(&expectation);
 
-                if let Some(local) = murf::LocalContext::current().borrow_mut().as_mut() {
+                if let Some(local) = #ident_murf :: LocalContext::current().borrow_mut().as_mut() {
                     local.push(*TYPE_ID, weak)
                 } else {
                     EXPECTATIONS.lock().push(weak);
@@ -93,6 +94,8 @@ impl ToTokens for ExpectationBuilder {
         ) = ga_expectation_builder.split_for_impl();
 
         tokens.extend(quote! {
+            /// Helper type that is used to set the values of a [`Expectation`] object before it is
+            /// added to the list of expected calls of a mock object.
             #must_use
             pub struct ExpectationBuilder #ga_expectation_builder_impl #ga_expectation_builder_where {
                 handle: &'mock_exp Handle #ga_handle_types,
@@ -100,9 +103,12 @@ impl ToTokens for ExpectationBuilder {
             }
 
             impl #ga_expectation_builder_impl ExpectationBuilder #ga_expectation_builder_types #ga_expectation_builder_where {
+                /// Create a new [`ExpectationBuilder`] object
                 pub fn new(handle: &'mock_exp Handle #ga_handle_types,) -> Self {
-                    let mut expectation = Expectation::default();
-                    expectation.sequences = InSequence::create_handle().into_iter().collect();
+                    let mut expectation = Expectation {
+                        sequences: InSequence::create_handle().into_iter().collect(),
+                        ..Expectation::default()
+                    };
                     expectation.times.range = (1..).into();
 
                     Self {
@@ -111,54 +117,80 @@ impl ToTokens for ExpectationBuilder {
                     }
                 }
 
+                /// Add a description to the expectation.
                 pub fn description<S: Into<String>>(mut self, value: S) -> Self {
-                    self.expectation.as_mut().unwrap().description = Some(value.into());
+                    self.expectation().description = Some(value.into());
 
                     self
                 }
 
+                /// Add a [`Matcher`] to the expectation.
+                ///
+                /// Matchers can be used to verify that the arguments of method call matches the expectation.
                 pub fn with<M: #lts_mock Matcher<#arg_types_prepared_lt> #trait_send #trait_sync #lt>(mut self, matcher: M) -> Self {
-                    self.expectation.as_mut().unwrap().matcher = Some(Box::new(matcher));
+                    self.expectation().matcher = Some(Box::new(matcher));
 
                     self
                 }
 
+                /// Set the sequence the expectation should be executed in.
                 pub fn in_sequence(mut self, sequence: &Sequence) -> Self {
-                    self.expectation.as_mut().unwrap().sequences = vec![ sequence.create_handle() ];
+                    self.expectation().sequences = vec![ sequence.create_handle() ];
 
                     self
                 }
 
+                /// Add a sequence the expectation should be executed in.
                 pub fn add_sequence(mut self, sequence: &Sequence) -> Self {
-                    self.expectation.as_mut().unwrap().sequences.push(sequence.create_handle());
+                    self.expectation().sequences.push(sequence.create_handle());
 
                     self
                 }
 
+                /// Remove the expectation from all sequences.
                 pub fn no_sequences(mut self) -> Self {
-                    self.expectation.as_mut().unwrap().sequences.clear();
+                    self.expectation().sequences.clear();
 
                     self
                 }
 
+                /// Specify the number of calls for this expectation.
                 pub fn times<R: Into<TimesRange>>(mut self, range: R) -> Self {
-                    self.expectation.as_mut().unwrap().times.range = range.into();
+                    self.expectation().times.range = range.into();
 
                     self
                 }
 
+                /// Specify an action that should be executed once the actual call to the linked method was made.
+                ///
+                /// This will set `.times(1)` before the action is added. I you want to use
+                /// repeatedly executed actions please have a look at [`will_repeatedly`](Self::will_repeatedly).
                 pub fn will_once<A>(self, action: A)
                 where
                     A: #lts_mock Action<#arg_types_prepared_lt, #return_type> #trait_send #trait_sync #lt,
                 {
-                    self.times(1).expectation.as_mut().unwrap().action = Some(Box::new(OnetimeAction::new(action)));
+                    self.times(1).expectation().action = Some(Box::new(OnetimeAction::new(action)));
                 }
 
+                /// Specify an action that should be executed each time a call to the linked method was made.
                 pub fn will_repeatedly<A>(mut self, action: A)
                 where
                     A: #lts_mock Action<#arg_types_prepared_lt, #return_type> #trait_send #trait_sync + Clone #lt,
                 {
-                    self.expectation.as_mut().unwrap().action = Some(Box::new(RepeatedAction::new(action)));
+                    self.expectation().action = Some(Box::new(RepeatedAction::new(action)));
+                }
+
+                fn expectation(&mut self) -> &mut Expectation #ga_expectation_types {
+                    self.expectation.as_mut().unwrap()
+                }
+            }
+
+            impl #ga_expectation_builder_impl Debug for ExpectationBuilder #ga_expectation_builder_types #ga_expectation_builder_where {
+                fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+                    f.debug_struct("ExpectationBuilder")
+                        .field("handle", &self.handle)
+                        .field("expectation", self.expectation.as_ref().unwrap())
+                        .finish()
                 }
             }
 

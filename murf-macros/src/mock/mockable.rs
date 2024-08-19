@@ -33,11 +33,18 @@ impl ToTokens for Mockable {
 
         if *extern_mock_lifetime {
             tokens.extend(quote! {
+                /// Helper trait that is used to convert a object into it's mocked version.
                 pub trait Mockable<'mock> {
+                    /// Mocked version of the object.
                     type Mock;
+
+                    /// Handle to control the mock object.
                     type Handle;
 
+                    /// Returns a mocked version of the object.
                     fn into_mock(self) -> Self::Mock;
+
+                    /// Returns a handle and a mocked version of the object.
                     fn into_mock_with_handle(self) -> (Self::Handle, Self::Mock);
                 }
 
@@ -56,11 +63,18 @@ impl ToTokens for Mockable {
             });
         } else {
             tokens.extend(quote! {
+                /// Helper trait that is used to convert a object into it's mocked version.
                 pub trait Mockable {
+                    /// Mocked version of the object.
                     type Mock<'mock>;
+
+                    /// Handle to control the mock object.
                     type Handle<'mock>;
 
+                    /// Returns a mocked version of the object.
                     fn into_mock<'mock>(self) -> Self::Mock<'mock>;
+
+                    /// Returns a handle and a mocked version of the object.
                     fn into_mock_with_handle<'mock>(self) -> (Self::Handle<'mock>, Self::Mock<'mock>);
                 }
 

@@ -38,7 +38,7 @@ impl_matcher!(
     Eq,
     PartialEq::eq,
     "Eq({:?})",
-    "Create a new [`Eq`](Eq) matcher that checks if a argument is equal to the passed `value`.",
+    "Create a new [`Eq`](struct@Eq) matcher that checks if a argument is equal to the passed `value`.",
     "Implements a [`Matcher`] that checks if a argument is equal to the passed value `T`."
 );
 impl_matcher!(

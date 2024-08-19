@@ -29,7 +29,9 @@ impl Handle {
 
     fn render_method(context: &MethodContextData) -> TokenStream {
         let MethodContextData {
+            trait_,
             is_associated,
+            ident_method,
             ident_expect_method,
             ident_expectation_module,
             ga_method,
@@ -46,11 +48,26 @@ impl Handle {
         let (ga_method_impl, _ga_method_types, ga_method_where) = ga_method.split_for_impl();
         let (_ga_builder_impl, ga_builder_types, _ga_builder_where) = ga_builder.split_for_impl();
 
+        let type_ = if let Some(trait_) = trait_ {
+            trait_.into_token_stream().to_string()
+        } else {
+            context.ident_state.to_string()
+        };
+
+        let doc = format!(
+            r"Add a new expectation for the [`{type_}::{ident_method}`]({type_}::{ident_method}) method to the mocked object.
+
+# Returns
+Returns an [`ExpectationBuilder`]({ident_expectation_module}::ExpectationBuilder) that
+can be used to specialize the expectation further."
+        );
+
         quote! {
+            #[doc = #doc]
             pub fn #ident_expect_method #ga_method_impl(&self) -> #ident_expectation_module::ExpectationBuilder #ga_builder_types
             #ga_method_where
             {
-                #ident_expectation_module::ExpectationBuilder::new(&self)
+                #ident_expectation_module::ExpectationBuilder::new(self)
             }
         }
     }
@@ -73,12 +90,28 @@ impl ToTokens for Handle {
         let methods = methods.iter().map(|context| Self::render_method(context));
 
         tokens.extend(quote! {
+            /// Handle that is used to control the mocked object.
+            ///
+            /// The handle can be used to add new expectations to a mocked object
+            /// or to verify that all expectations has been fulfilled.
+            ///
+            /// If the handle is dropped, all expectations are verified automatically.
+            /// I one of the expectations was not fulfilled a panic is raised.
+            #[must_use]
             pub struct Handle #ga_handle_impl #ga_handle_where {
+                /// Shared state that is used across the different helper objects of one mocked object.
                 pub shared: Arc<Mutex<Shared #ga_handle_types>>,
+
+                /// Whether to check if expectations are fulfilled on drop or not.
                 pub check_on_drop: bool,
             }
 
             impl #ga_handle_impl Handle #ga_handle_types #ga_handle_where {
+                /// Check if all expectations has been fulfilled.
+                ///
+                /// # Panics
+                ///
+                /// Panics if at least one expectation was nof fulfilled.
                 pub fn checkpoint(&self) {
                     if let Some(mut locked) = self.shared.try_lock() {
                         locked.checkpoint();
@@ -87,10 +120,14 @@ impl ToTokens for Handle {
                     }
                 }
 
+                /// Returns a reference to itself.
+                ///
+                /// This is used to make the public API of the handle compatible to the mock object.
                 pub fn mock_handle(&self) -> &Self {
                     self
                 }
 
+                /// Drop the handle without checking the expectations.
                 pub fn release(mut self) {
                     self.check_on_drop = false;
 
@@ -103,9 +140,10 @@ impl ToTokens for Handle {
             }
 
             impl #ga_handle_impl Handle #ga_handle_types #ga_handle_where {
+                /// Create a new [`Handle`] object.
                 pub fn new() -> Self {
                     Self {
-                        shared: Default::default(),
+                        shared: Arc::default(),
                         check_on_drop: true,
                     }
                 }
@@ -123,6 +161,15 @@ impl ToTokens for Handle {
             impl #ga_handle_impl Default for Handle #ga_handle_types #ga_handle_where {
                 fn default() -> Self {
                     Self::new()
+                }
+            }
+
+            impl #ga_handle_impl Debug for Handle #ga_handle_types #ga_handle_where {
+                fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+                    f.debug_struct("Handle")
+                        .field("shared", &self.shared)
+                        .field("check_on_drop", &self.check_on_drop)
+                        .finish()
                 }
             }
 

@@ -12,7 +12,7 @@ use syn::{
     Result as ParseResult, Token, Type,
 };
 
-use crate::misc::{format_expect_call, IterEx};
+use crate::misc::{format_expect_call, ident_murf, IterEx};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum CallMode {
@@ -88,6 +88,8 @@ impl ToTokens for Call {
             mode,
         } = self;
 
+        let ident_murf = ident_murf();
+
         let desc = quote!(format!("at {}:{}", file!(), line!()));
         let obj = obj.to_token_stream();
         let method = format_expect_call(method, as_trait.as_ref());
@@ -116,12 +118,12 @@ impl ToTokens for Call {
             })
         };
         let args = if args.is_empty() && mode == &CallMode::Static {
-            quote!(.with(murf::matcher::no_args()))
+            quote!(.with(#ident_murf :: matcher::no_args()))
         } else {
             let call_method = mode == &CallMode::Method;
             let args = args.iter().map(|a| {
                 if a.to_token_stream().to_string() == "_" {
-                    Cow::Owned(Expr::Verbatim(quote!(murf::matcher::any())))
+                    Cow::Owned(Expr::Verbatim(quote!(#ident_murf :: matcher::any())))
                 } else {
                     Cow::Borrowed(a)
                 }
@@ -129,14 +131,14 @@ impl ToTokens for Call {
 
             let mut arg_count = 0;
             let args = call_method
-                .then(|| Cow::Owned(Expr::Verbatim(quote!(murf::matcher::any()))))
+                .then(|| Cow::Owned(Expr::Verbatim(quote!(#ident_murf :: matcher::any()))))
                 .into_iter()
                 .chain(args)
                 .inspect(|_| arg_count += 1)
                 .parenthesis();
 
             if arg_count > 1 {
-                quote!(.with(murf::matcher::multi(#args)))
+                quote!(.with(#ident_murf :: matcher::multi(#args)))
             } else {
                 quote!(.with(#args))
             }

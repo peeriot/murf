@@ -2,13 +2,13 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use crate::Matcher;
 
-/// Create a new [`Deref`] matcher, that calls the [`deref`](std::ops::Deref::deref)
+/// Create a new [`Deref`] matcher, that calls the [`deref`](std::ops::Deref::deref())
 /// method of the argument and forwards it to the passed `inner` matcher.
 pub fn deref<M>(inner: M) -> Deref<M> {
     Deref(inner)
 }
 
-/// Implements a [`Matcher`] that calls the [`deref`](std::ops::Deref::deref)
+/// Implements a [`Matcher`] that calls the [`deref`](std::ops::Deref::deref())
 /// method of the argument and forwards it to the passed matcher `M`.
 #[must_use]
 #[derive(Debug)]

@@ -31,6 +31,7 @@ impl ToTokens for Shared {
         } = self;
 
         let ContextData {
+            ident_murf,
             ident_state,
             ga_mock,
             trait_send,
@@ -46,11 +47,11 @@ impl ToTokens for Shared {
 
             if cx.is_associated {
                 quote! {
-                    #field: Vec<Arc<Mutex<Box<dyn murf::Expectation + Send + Sync + 'static>>>>
+                    #field: Vec<Arc<Mutex<Box<dyn #ident_murf :: Expectation + Send + Sync + 'static>>>>
                 }
             } else {
                 quote! {
-                    #field: Vec<Box<dyn murf::Expectation #trait_send #trait_sync + 'mock>>
+                    #field: Vec<Box<dyn #ident_murf :: Expectation #trait_send #trait_sync + 'mock>>
                 }
             }
         });
@@ -108,6 +109,7 @@ impl ToTokens for Shared {
         });
 
         tokens.extend(quote! {
+            /// State that is shared between the different helper objects.
             pub struct Shared #ga_mock_types #ga_mock_where {
                 #( #expectation_field_defs, )*
                 _marker: #ga_mock_phantom,
@@ -132,6 +134,12 @@ impl ToTokens for Shared {
                         #( #expectation_field_ctor, )*
                         _marker: PhantomData,
                     }
+                }
+            }
+
+            impl #ga_mock_impl Debug for Shared #ga_mock_types #ga_mock_where {
+                fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+                    write!(f, "Shared")
                 }
             }
         });

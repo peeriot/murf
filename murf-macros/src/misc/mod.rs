@@ -62,3 +62,13 @@ pub(crate) fn format_expect_module(method: &Ident, as_trait: Option<&Path>) -> I
 pub(crate) fn format_expectations_field(ident: &Ident) -> Ident {
     format_ident!("{}_expectations", ident)
 }
+
+pub(crate) fn ident_murf() -> Ident {
+    use proc_macro_crate::{crate_name, FoundCrate};
+
+    match crate_name("murf") {
+        Ok(FoundCrate::Itself) => format_ident!("crate"),
+        Ok(FoundCrate::Name(name)) => format_ident!("{name}"),
+        Err(_) => format_ident!("murf"),
+    }
+}

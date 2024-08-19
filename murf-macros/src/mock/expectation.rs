@@ -79,6 +79,7 @@ impl ToTokens for Expectation {
         let ImplContextData { context, .. } = &**context;
 
         let ContextData {
+            ident_murf,
             trait_send,
             trait_sync,
             ..
@@ -108,12 +109,24 @@ impl ToTokens for Expectation {
             ga_expectation.split_for_impl();
 
         tokens.extend(quote! {
+            /// Defines the values of an expected call to a mocked method of the mock object.
+            #[allow(clippy::type_complexity)]
             pub struct Expectation #ga_expectation_impl #ga_expectation_where {
+                /// Defines how often the call is expected to be executed.
                 pub times: Times,
+
+                /// Human readable description of the expectation.
                 pub description: Option<String>,
+
+                /// Action that is executed once the actual call to the mocked method is made.
                 pub action: Option<Box<dyn #lts_mock RepeatableAction<#arg_types_prepared_lt, #return_type> #trait_send #trait_sync #lt>>,
+
+                /// Matcher that is used to verify the arguments of the call.
                 pub matcher: Option<Box<dyn #lts_mock Matcher<#arg_types_prepared_lt> #trait_send #trait_sync #lt>>,
+
+                /// List of sequences the expectation must respect.
                 pub sequences: Vec<SequenceHandle>,
+
                 _marker: #ga_expectation_phantom,
             }
 
@@ -130,7 +143,23 @@ impl ToTokens for Expectation {
                 }
             }
 
+            impl #ga_expectation_impl Debug for Expectation #ga_expectation_types #ga_expectation_where {
+                fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+                    f.debug_struct("Expectation")
+                        .field("times", &self.times)
+                        .field("description", &self.description)
+                        .field("action", &self.action.is_some())
+                        .field("matcher", &self.matcher.is_some())
+                        .field("sequences", &self.sequences)
+                        .finish()
+                }
+            }
+
             impl #ga_expectation_impl Expectation #ga_expectation_types #ga_expectation_where {
+                /// Check if the arguments of a call matches the expectation.
+                ///
+                /// # Returns
+                /// Returns `true` if the arguments are valid, `false` otherwise.
                 pub fn matches #lts_temp (&self, args: &#arg_types_prepared) -> bool {
                     if let Some(m) = &self.matcher {
                         m.matches(args)
@@ -140,7 +169,7 @@ impl ToTokens for Expectation {
                 }
             }
 
-            impl #ga_expectation_impl murf::Expectation for Expectation #ga_expectation_types #ga_expectation_where {
+            impl #ga_expectation_impl #ident_murf :: Expectation for Expectation #ga_expectation_types #ga_expectation_where {
                 fn type_id(&self) -> usize {
                     *TYPE_ID
                 }
@@ -173,7 +202,7 @@ impl ToTokens for Expectation {
                     }
 
                     if let Some(d) = &self.description {
-                        write!(f, " {}", d)?;
+                        write!(f, " {d}")?;
                     }
 
                     Ok(())

@@ -25,6 +25,8 @@ impl MockMethod {
             ..
         } = &**context;
 
+        let ident_murf = &context.ident_murf;
+
         let locked = if *is_associated {
             quote! {
                 let locked = #ident_expectation_module::EXPECTATIONS.lock();
@@ -38,7 +40,7 @@ impl MockMethod {
 
         let expectations_iter = if *is_associated {
             quote! {
-                murf::LocalContext::current()
+                #ident_murf :: LocalContext::current()
                     .borrow()
                     .as_ref()
                     .into_iter()
@@ -102,6 +104,7 @@ impl MockMethod {
 
             quote! {
                 let #arg_names_prepared = args;
+                #[allow(clippy::let_and_return)]
                 let ret = <#self_ty as #t>::#ident #turbofish ( #( #default_args ),* );
             }
         } else {
@@ -112,6 +115,7 @@ impl MockMethod {
 
             quote! {
                 let #arg_names_prepared = args;
+                #[allow(clippy::let_and_return)]
                 let ret = #t::#ident #turbofish ( #( #default_args ),* );
             }
         };
@@ -173,7 +177,7 @@ impl MockMethod {
             for ex in #expectations_iter {
                 #expectation_unwrap
 
-                let _ = writeln!(msg, "- {}", ex);
+                let _ = writeln!(msg, "- {ex}");
 
                 /* type matches? */
                 if ex.type_signature() != type_name::<#type_signature>() {
@@ -185,18 +189,19 @@ impl MockMethod {
                 }
                 let _ = writeln!(msg, "    Type signature:      ok");
 
-                let ex: &mut dyn murf::Expectation = &mut **ex;
-                let ex = unsafe { &mut *(ex as *mut dyn murf::Expectation as *mut #ident_expectation_module::Expectation #ga_expectation_types) };
+                let ex: &mut dyn #ident_murf :: Expectation = &mut **ex;
+                #[allow(clippy::cast_ptr_alignment)]
+                let ex = unsafe { &mut *(std::ptr::from_mut::<dyn #ident_murf :: Expectation>(ex).cast::<#ident_expectation_module::Expectation #ga_expectation_types>()) };
 
                 let mut is_valid = true;
 
                 /* value matches? */
-                if !ex.matches(&args) {
+                if ex.matches(&args) {
+                    let _ = writeln!(msg, "    Argument matcher:    ok");
+                } else {
                     let _ = writeln!(msg, "    Argument matcher:    not ok");
 
                     is_valid = false;
-                } else {
-                    let _ = writeln!(msg, "    Argument matcher:    ok");
                 }
 
                 /* is done? */
@@ -228,7 +233,7 @@ impl MockMethod {
                         let _ = writeln!(msg, "        has unsatisfied expectations");
 
                         for ex in seq_handle.unsatisfied() {
-                            let _ = writeln!(msg, "          - {}", ex);
+                            let _ = writeln!(msg, "          - {ex}");
                         }
                     }
                 }
@@ -253,7 +258,7 @@ impl MockMethod {
                 };
             }
 
-            println!("{}", msg);
+            println!("{msg}");
 
             panic!(#error);
         }))];
