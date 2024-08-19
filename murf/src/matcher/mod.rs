@@ -8,7 +8,7 @@ mod no_args;
 mod range;
 mod string;
 
-use std::fmt::{Formatter, Result as FmtResult};
+use std::fmt::Display;
 
 pub use any::{any, Any};
 pub use closure::{closure, Closure};
@@ -26,15 +26,8 @@ pub use string::{
 
 /// A matcher is used to check if the passed argument matches a pre-defined
 /// expectation. It is mostly used to verify the arguments to an expected call.
-pub trait Matcher<T> {
+pub trait Matcher<T>: Display {
     /// Returns `true` if the passed `value` matches the expectations, `false`
     /// otherwise.
     fn matches(&self, value: &T) -> bool;
-
-    /// Write a human readable representation of the matcher to the passed
-    /// formatter.
-    ///
-    /// # Errors
-    /// Returns an error if writing to the formatter failed.
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult;
 }

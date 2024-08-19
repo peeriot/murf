@@ -36,7 +36,13 @@ where
     fn matches(&self, value: &U) -> bool {
         self.range.contains(value)
     }
+}
 
+impl<R, T> Display for Range<R, T>
+where
+    R: RangeBounds<T>,
+    T: Display,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self.range.start_bound() {
             Bound::Unbounded => write!(f, "[_, "),

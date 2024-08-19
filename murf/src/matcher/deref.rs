@@ -1,4 +1,4 @@
-use std::fmt::{Formatter, Result as FmtResult};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use crate::Matcher;
 
@@ -19,7 +19,12 @@ where
     fn matches(&self, value: &T) -> bool {
         self.0.matches(&**value)
     }
+}
 
+impl<M> Display for Deref<M>
+where
+    M: Display,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "deref(")?;
         self.0.fmt(f)?;

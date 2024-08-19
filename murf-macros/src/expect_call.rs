@@ -126,13 +126,20 @@ impl ToTokens for Call {
                     Cow::Borrowed(a)
                 }
             });
+
+            let mut arg_count = 0;
             let args = call_method
                 .then(|| Cow::Owned(Expr::Verbatim(quote!(murf::matcher::any()))))
                 .into_iter()
                 .chain(args)
+                .inspect(|_| arg_count += 1)
                 .parenthesis();
 
-            quote!(.with(murf::matcher::multi(#args)))
+            if arg_count > 1 {
+                quote!(.with(murf::matcher::multi(#args)))
+            } else {
+                quote!(.with(#args))
+            }
         };
 
         tokens.extend(quote! {

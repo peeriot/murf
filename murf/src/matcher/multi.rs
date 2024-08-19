@@ -1,4 +1,4 @@
-use std::fmt::{Formatter, Result as FmtResult};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::mem::take;
 
 use crate::Matcher;
@@ -27,7 +27,15 @@ macro_rules! impl_multi {
                     $matcher_name.matches($arg_name)
                 )&&+
             }
+        }
 
+        #[allow(unused_parens)]
+        impl<$( $matcher_type ),+> Display for Multi<($( $matcher_type ),+)>
+        where
+            $(
+                $matcher_type: Display,
+            )+
+        {
             fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
                 let mut first = true;
                 let Self(($( $matcher_name ),+)) = self;
@@ -46,7 +54,6 @@ macro_rules! impl_multi {
     };
 }
 
-impl_multi!((a0: T0) => (m0: M0));
 impl_multi!((a0: T0, a1: T1) => (m0: M0, m1: M1));
 impl_multi!((a0: T0, a1: T1, a2: T2) => (m0: M0, m1: M1, m2: M2));
 impl_multi!((a0: T0, a1: T1, a2: T2, a3: T3) => (m0: M0, m1: M1, m2: M2, m3: M3));

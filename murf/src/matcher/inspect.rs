@@ -26,7 +26,12 @@ where
 
         self.0.matches(value)
     }
+}
 
+impl<M> Display for Inspect<M>
+where
+    M: Display,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         self.0.fmt(f)
     }

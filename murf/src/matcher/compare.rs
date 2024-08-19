@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 use super::Matcher;
 
@@ -19,7 +19,12 @@ macro_rules! impl_matcher {
             fn matches(&self, value: &X) -> bool {
                 self.0.$method(value)
             }
+        }
 
+        impl<T> Display for $type<T>
+        where
+            T: Debug,
+        {
             fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
                 write!(f, $fmt, self.0)
             }

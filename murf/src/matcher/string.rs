@@ -1,4 +1,4 @@
-use std::fmt::{Formatter, Result as FmtResult};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use super::Matcher;
 
@@ -19,7 +19,9 @@ where
     fn matches(&self, value: &X) -> bool {
         value.as_ref().is_empty()
     }
+}
 
+impl Display for IsEmpty {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "IsEmpty")
     }
@@ -41,7 +43,9 @@ macro_rules! impl_str_matcher {
             fn matches(&self, value: &X) -> bool {
                 value.as_ref().$method(&self.0)
             }
+        }
 
+        impl Display for $type {
             fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
                 write!(f, $fmt, self.0)
             }
