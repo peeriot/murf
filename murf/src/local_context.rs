@@ -1,3 +1,5 @@
+//! The [`local_context`](self) module implements the [`LocalContext`] type.
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -8,12 +10,21 @@ use parking_lot::Mutex;
 
 use crate::Expectation;
 
+/// Type that can be used to manage and store call expectations to a associated
+/// or static function in a thread local context. If no [`LocalContext`] is
+/// provided when the expectation was defined the expectation is stored in the
+/// global expectation context.
+///
+/// Local contexts may be useful if you want to use `murf` in a threaded environment
+/// to execute tests in parallel. Using the global context the expectations of
+/// multiple tests may be mixed which result in undefined behavior.
 #[must_use]
 #[derive(Debug)]
 pub struct LocalContext {
     _marker: PhantomData<()>,
 }
 
+/// Actual state that is stored for the [`LocalContext`].
 #[derive(Debug)]
 pub struct Inner {
     parent: Option<Box<Inner>>,
@@ -23,6 +34,7 @@ pub struct Inner {
 type WeakException = Weak<Mutex<Box<dyn Expectation + Send + Sync + 'static>>>;
 
 impl LocalContext {
+    /// Create a new [`LocalContext`] instance.
     pub fn new() -> Self {
         CURRENT_CONTEXT.with(|cell| {
             let mut cell = cell.borrow_mut();
@@ -39,6 +51,7 @@ impl LocalContext {
         }
     }
 
+    /// Get the state of the current local context.
     pub fn current() -> Rc<RefCell<Option<Inner>>> {
         CURRENT_CONTEXT.with(Clone::clone)
     }
@@ -60,6 +73,7 @@ impl Drop for LocalContext {
 }
 
 impl Inner {
+    /// Return a iterator of expectations that are defined in the current thread local context.
     pub fn expectations(&self, type_id: usize) -> impl Iterator<Item = &'_ WeakException> + '_ {
         let parent: Box<dyn Iterator<Item = &WeakException>> = Box::new(
             self.parent
@@ -75,6 +89,7 @@ impl Inner {
             .chain(parent)
     }
 
+    /// Add a expectation the the current thread local context.
     pub fn push(&mut self, type_id: usize, expectation: WeakException) {
         self.expectations
             .entry(type_id)

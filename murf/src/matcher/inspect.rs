@@ -2,10 +2,14 @@ use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 use crate::Matcher;
 
+/// Creates a new [`Inspect`] matcher that prints the argument to stdout and then
+/// forwards it to the passed `inner` matcher.
 pub fn inspect<M>(inner: M) -> Inspect<M> {
     Inspect(inner)
 }
 
+/// implements a [`Matcher`] that prints the argument to stdout and then forwards
+/// it to the passed inner matcher `M`.
 #[must_use]
 #[derive(Debug)]
 pub struct Inspect<M>(pub M);

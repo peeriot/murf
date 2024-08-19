@@ -1,3 +1,5 @@
+//! Implements the [`Duration`] type.
+
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::ops::{Deref, DerefMut};
@@ -6,12 +8,14 @@ use std::time::Duration as StdDuration;
 
 use parse_duration::{parse, parse::Error};
 
+/// Duration type that can be used inside a [`Matcher`](crate::Matcher).
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Duration(pub StdDuration);
 
 macro_rules! impl_from {
     (fn $name:ident(value: $type:ty)) => {
         #[must_use]
+        #[allow(missing_docs)]
         pub fn $name(value: $type) -> Self {
             Self(StdDuration::$name(value))
         }

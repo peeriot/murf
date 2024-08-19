@@ -2,10 +2,14 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use crate::Matcher;
 
+/// Creates a new [`NoArgs`] matcher, that matches only the empty parameter list
+/// `()` and always returns `true`.
 pub fn no_args() -> NoArgs {
     NoArgs
 }
 
+/// Implements a [`Matcher`], that matches only the empty parameter list `()` and
+/// always returns `true`.
 #[must_use]
 #[derive(Debug)]
 pub struct NoArgs;

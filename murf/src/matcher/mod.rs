@@ -1,3 +1,6 @@
+//! The [`matcher`](self) module define different [`Matcher`]s that can be used
+//! to check the arguments of a call expectation.
+
 mod any;
 mod closure;
 mod compare;

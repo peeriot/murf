@@ -2,10 +2,14 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use crate::Matcher;
 
+/// Create a new [`Closure`] matcher that executes the passed function `f` to
+/// verify if a argument matches the expectation.
 pub fn closure<F>(f: F) -> Closure<F> {
     Closure(f)
 }
 
+/// Implements a [`Matcher`] that executes the passed function `F` to
+/// verify if a argument matches the expectation.
 #[must_use]
 #[derive(Debug)]
 pub struct Closure<F>(pub F);

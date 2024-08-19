@@ -3,10 +3,18 @@ use std::mem::take;
 
 use crate::Matcher;
 
-pub fn multi<T>(value: T) -> Multi<T> {
-    Multi(value)
+/// Creates a new [`Multi`] matcher that checks a tuple of parameters against
+/// the passed tuple of `inner` matchers.
+pub fn multi<T>(inner: T) -> Multi<T> {
+    Multi(inner)
 }
 
+/// Implements a [`Matcher`] that checks a tuple of parameters against the passed
+/// inner tuple of matchers `T`.
+///
+/// `T` has to be a valid tuple between two and ten arguments:
+/// - `(T1, T2)`
+/// - `(T1, ..., T10)`
 #[must_use]
 #[derive(Debug)]
 pub struct Multi<T>(T);

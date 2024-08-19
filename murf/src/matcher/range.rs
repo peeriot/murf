@@ -4,6 +4,8 @@ use std::ops::{Bound, RangeBounds};
 
 use crate::Matcher;
 
+/// Creates a new [`Range`] matcher that matches if the argument it is in the passed
+/// `range`.
 pub fn range<R, T>(range: R) -> Range<R, T>
 where
     R: RangeBounds<T>,
@@ -11,6 +13,7 @@ where
     Range::new(range)
 }
 
+/// Implements a [`Matcher`], that matches if the argument is in the passed range `R`.
 #[must_use]
 #[derive(Debug)]
 pub struct Range<R, T> {
@@ -19,6 +22,7 @@ pub struct Range<R, T> {
 }
 
 impl<R, T> Range<R, T> {
+    /// Create a new [`Range`] matcher instance.
     pub fn new(range: R) -> Self {
         Self {
             range,
