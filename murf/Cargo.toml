@@ -2,17 +2,13 @@
 name = "murf"
 version = "0.1.0"
 edition = "2021"
-description = "A mocking and unit test framework for rust"
-license = "MIT"
-homepage = "https://github.com/peeriot/murf"
-readme = "README.md"
-keywords = [ "mock", "mocking", "test", "testing" ]
-categories = [ "development-tools::testing" ]
 
 [dependencies]
 murf-macros = "0.1"
+once_cell = { version = "1.18", features = [ "parking_lot" ] }
 parking_lot = "0.12"
+parse_duration = "2.1"
 
 [dev-dependencies]
 futures = "0.3"
-murf-macros = { version = "0.1", features = [ ] }
+murf-macros = { version = "*", features = [ "force-name" ] }

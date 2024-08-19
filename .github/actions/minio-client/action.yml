@@ -1,0 +1,36 @@
+name: 'Minio Client'
+inputs:
+  run:
+    description: 'Run command in container'
+    required: true
+  host:
+    description: 'Minio endpoint of object storage host'
+    required: true
+  access_key:
+    description: 'Minio access key (username)'
+    required: true
+  secret_key:
+    description: 'Minio secret key (password)'
+    required: true
+  alias:
+    description: 'Name of the host alias'
+    required: false
+    default: host
+runs:
+  using: 'composite'
+  steps:
+    - name: Run MinIo Docker Container
+      uses: ./.github/actions/docker-run
+      env:
+        MINIO_HOST: ${{ inputs.host }}
+        MINIO_ACCESS_KEY: ${{ inputs.access_key }}
+        MINIO_SECRET_KEY: ${{ inputs.secret_key }}
+        MINIO_ALIAS: ${{ inputs.alias }}
+        MINIO_RUN: ${{ inputs.run }}
+      with:
+        image: minio/mc:RELEASE.2024-07-31T15-58-33Z
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        user: user
+        setup_known_hosts: false
+        run: ./.github/actions/minio-client/exec.sh

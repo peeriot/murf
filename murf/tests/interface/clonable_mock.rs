@@ -1,4 +1,4 @@
-use murf::{expect_call, matcher::Eq, mock, InSequence};
+use murf::{expect_method_call, matcher::Eq, mock, InSequence};
 
 trait Fuu {
     fn fuu(&self, arg: usize);
@@ -15,11 +15,11 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, mock1) = MyStruct::mock();
+    let (handle, mock1) = MyStruct::mock_with_handle();
 
     let _seq = InSequence::default();
-    expect_call!(handle as Fuu, fuu(Eq(1))).times(1);
-    expect_call!(handle as Fuu, fuu(Eq(2))).times(1);
+    expect_method_call!(handle as Fuu, fuu(Eq(1))).times(1);
+    expect_method_call!(handle as Fuu, fuu(Eq(2))).times(1);
 
     let mock2 = mock1.clone();
 

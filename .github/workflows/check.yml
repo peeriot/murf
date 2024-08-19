@@ -1,0 +1,33 @@
+name: Check Workflow
+on:
+  workflow_call:
+  pull_request:
+  push:
+    branches:
+      - master
+jobs:
+  check:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Cleanup
+        run: |
+          git clean -ffdx -e target/
+          git reset --hard HEAD
+
+      - name: Check
+        uses: ./.github/actions/docker-run
+        with:
+          image: ghcr.io/peeriot/rust:1.79.0-2
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          user: user
+          volumes: |
+            cache-cargo:/usr/local/cargo
+            cache-rustup:/usr/local/rustup
+          run: |
+            ./.ci/check/check

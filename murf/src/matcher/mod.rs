@@ -1,16 +1,24 @@
+//! The [`matcher`](self) module define different [`Matcher`]s that can be used
+//! to check the arguments of a call expectation.
+
 mod any;
 mod closure;
 mod compare;
+mod deref;
+mod inspect;
 mod multi;
 mod no_args;
 mod range;
 mod string;
 
-use std::fmt::{Formatter, Result as FmtResult};
+use std::fmt::Display;
 
 pub use any::{any, Any};
 pub use closure::{closure, Closure};
 pub use compare::{eq, ge, gt, le, lt, ne, Eq, Ge, Gt, Le, Lt, Ne};
+pub use deref::{deref, Deref};
+pub use inspect::{inspect, Inspect};
+
 pub use multi::{multi, Multi};
 pub use no_args::{no_args, NoArgs};
 pub use range::{range, Range};
@@ -19,7 +27,10 @@ pub use string::{
     Contains as StrContains, EndsWith as StrEndsWith, IsEmpty, StartsWith as StrStartsWith,
 };
 
-pub trait Matcher<T> {
+/// A matcher is used to check if the passed argument matches a pre-defined
+/// expectation. It is mostly used to verify the arguments to an expected call.
+pub trait Matcher<T>: Display {
+    /// Returns `true` if the passed `value` matches the expectations, `false`
+    /// otherwise.
     fn matches(&self, value: &T) -> bool;
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult;
 }

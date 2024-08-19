@@ -1,12 +1,22 @@
-use std::fmt::{Formatter, Result as FmtResult};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::mem::take;
 
 use crate::Matcher;
 
-pub fn multi<T>(value: T) -> Multi<T> {
-    Multi(value)
+/// Creates a new [`Multi`] matcher that checks a tuple of parameters against
+/// the passed tuple of `inner` matchers.
+pub fn multi<T>(inner: T) -> Multi<T> {
+    Multi(inner)
 }
 
+/// Implements a [`Matcher`] that checks a tuple of parameters against the passed
+/// inner tuple of matchers `T`.
+///
+/// `T` has to be a valid tuple between two and ten arguments:
+/// - `(T1, T2)`
+/// - `(T1, ..., T10)`
+#[must_use]
+#[derive(Debug)]
 pub struct Multi<T>(T);
 
 macro_rules! impl_multi {
@@ -25,7 +35,15 @@ macro_rules! impl_multi {
                     $matcher_name.matches($arg_name)
                 )&&+
             }
+        }
 
+        #[allow(unused_parens)]
+        impl<$( $matcher_type ),+> Display for Multi<($( $matcher_type ),+)>
+        where
+            $(
+                $matcher_type: Display,
+            )+
+        {
             fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
                 let mut first = true;
                 let Self(($( $matcher_name ),+)) = self;
@@ -44,7 +62,6 @@ macro_rules! impl_multi {
     };
 }
 
-impl_multi!((a0: T0) => (m0: M0));
 impl_multi!((a0: T0, a1: T1) => (m0: M0, m1: M1));
 impl_multi!((a0: T0, a1: T1, a2: T2) => (m0: M0, m1: M1, m2: M2));
 impl_multi!((a0: T0, a1: T1, a2: T2, a3: T3) => (m0: M0, m1: M1, m2: M2, m3: M3));

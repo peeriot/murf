@@ -1,39 +1,39 @@
-use murf::{action::Return, expect_call, matcher::eq, mock};
+use murf::{action::Return, expect_method_call, matcher::eq, mock};
 
-trait MyTrait {
-    fn exec(&self, x: usize) -> usize;
+trait Fuu {
+    fn fuu(&self, x: usize) -> usize;
 }
 
 mock! {
     #[derive(Default)]
     pub struct MyStruct;
 
-    impl MyTrait for MyStruct {
-        fn exec(&self, _x: usize) -> usize;
+    impl Fuu for MyStruct {
+        fn fuu(&self, _x: usize) -> usize;
     }
 }
 
-struct Service<T: MyTrait> {
-    inner: T,
+struct Service<T: Fuu> {
+    fuu: T,
 }
 
-impl<T: MyTrait> Service<T> {
-    fn new(inner: T) -> Self {
-        Self { inner }
+impl<T: Fuu> Service<T> {
+    fn new(fuu: T) -> Self {
+        Self { fuu }
     }
 
     fn exec(&self) -> usize {
-        self.inner.exec(4)
+        self.fuu.fuu(4)
     }
 }
 
 #[test]
 fn success() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     let service = Service::new(mock);
 
-    expect_call!(handle as MyTrait, exec(eq(4))).will_once(Return(4));
+    expect_method_call!(handle as Fuu, fuu(eq(4))).will_once(Return(4));
 
     assert_eq!(4, service.exec());
 }
@@ -41,11 +41,11 @@ fn success() {
 #[test]
 #[should_panic]
 fn failure() {
-    let (handle, mock) = MyStruct::mock();
+    let (handle, mock) = MyStruct::mock_with_handle();
 
     let service = Service::new(mock);
 
-    expect_call!(handle as MyTrait, exec(_)).will_once(Return(4));
+    expect_method_call!(handle as Fuu, fuu(_)).will_once(Return(4));
 
     drop(service);
 }

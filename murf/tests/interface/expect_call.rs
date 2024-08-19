@@ -1,4 +1,6 @@
-use murf::{expect_call, mock};
+#![allow(dead_code)]
+
+use murf::{expect_method_call, mock};
 
 trait Fuu {
     fn fuu(&self);
@@ -15,11 +17,11 @@ mock! {
 
 #[test]
 fn success() {
-    let (handle, _mock) = MyStruct::mock();
+    let (handle, _mock) = MyStruct::mock_with_handle();
 
-    expect_call!(handle as Fuu, fuu()).times(0);
+    expect_method_call!(handle as Fuu, fuu()).times(0);
 
     let tuple = (handle, 0);
 
-    expect_call!(tuple.0 as Fuu, fuu()).times(0);
+    expect_method_call!(tuple.0 as Fuu, fuu()).times(0);
 }

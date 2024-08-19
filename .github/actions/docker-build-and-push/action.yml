@@ -1,0 +1,39 @@
+name: 'Docker Build and Push Image'
+description: 'Build and Push an Docker Image'
+inputs:
+  name:
+    description: 'Name of the image'
+    required: true
+  version:
+    description: 'Version of the image'
+    required: true
+  username:
+    description: 'Username to use for authentication'
+    required: true
+  password:
+    description: 'Password to use for authentication'
+    required: true
+  context:
+    description: 'Docker build context'
+    required: false
+    default: .
+  registry:
+    description: 'Docker registry to push to'
+    required: false
+    default: ghcr.io
+runs:
+  using: 'composite'
+  steps:
+    - name: Log in to the Container registry
+      uses: docker/login-action@v3.3.0
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.username }}
+        password: ${{ inputs.password }}
+    - name: Build and push docker image
+      id: push
+      uses: docker/build-push-action@v6.6.1
+      with:
+        context: ${{ inputs.context }}
+        push: true
+        tags: ${{ inputs.registry }}/${{ inputs.name }}:${{ inputs.version }},${{ inputs.registry }}/${{ inputs.name }}:latest
