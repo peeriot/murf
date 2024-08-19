@@ -1,11 +1,14 @@
-use std::{cell::UnsafeCell, mem::transmute};
+use std::{
+    cell::UnsafeCell,
+    ptr::{from_mut, from_ref},
+};
 
 use proc_macro2::{Ident, Span};
 use syn::{GenericArgument, Lifetime, Path, PathArguments, ReturnType, Type, TypeParamBound};
 
 use super::TempLifetimes;
 
-pub enum LifetimeReplaceMode<'x> {
+pub(crate) enum LifetimeReplaceMode<'x> {
     Mock,
     Temp(&'x mut TempLifetimes),
 }
@@ -19,7 +22,7 @@ impl<'x> LifetimeReplaceMode<'x> {
     }
 }
 
-pub trait TypeEx {
+pub(crate) trait TypeEx {
     fn contains_lifetime(&self, lt: &Lifetime) -> bool;
     fn contains_self_type(&self) -> bool;
 
@@ -192,12 +195,6 @@ trait TypeVisitor: Sized {
     }
 
     fn visit(&mut self, ty: &UnsafeCell<Type>) -> bool {
-        if !self.visit_type(ty) {
-            return false;
-        }
-
-        let ty = unsafe { &*ty.get() };
-
         fn visit_path<X: TypeVisitor>(this: &mut X, path: &Path) -> bool {
             for seg in &path.segments {
                 match &seg.arguments {
@@ -245,6 +242,12 @@ trait TypeVisitor: Sized {
 
             true
         }
+
+        if !self.visit_type(ty) {
+            return false;
+        }
+
+        let ty = unsafe { &*ty.get() };
 
         match ty {
             Type::Path(ty) => visit_path(self, &ty.path),
@@ -297,9 +300,9 @@ trait TypeVisitor: Sized {
 }
 
 fn unsafe_cell_ref<T>(value: &T) -> &UnsafeCell<T> {
-    unsafe { transmute(value) }
+    unsafe { &*(from_ref(value).cast::<std::cell::UnsafeCell<T>>()) }
 }
 
 fn unsafe_cell_mut<T>(value: &mut T) -> &UnsafeCell<T> {
-    unsafe { transmute(value) }
+    unsafe { &*(from_mut(value) as *const std::cell::UnsafeCell<T>) }
 }

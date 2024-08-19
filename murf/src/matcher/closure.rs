@@ -6,6 +6,8 @@ pub fn closure<F>(f: F) -> Closure<F> {
     Closure(f)
 }
 
+#[must_use]
+#[derive(Debug)]
 pub struct Closure<F>(pub F);
 
 impl<T, F> Matcher<T> for Closure<F>

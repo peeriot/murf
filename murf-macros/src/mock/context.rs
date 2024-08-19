@@ -7,7 +7,8 @@ use convert_case::{Case, Casing};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    FnArg, Generics, ImplItem, ImplItemFn, ItemImpl, Lifetime, Pat, PatType, Path, ReturnType, Type,
+    token::Colon, FnArg, Generics, ImplItem, ImplItemFn, ItemImpl, Lifetime, Pat, PatType, Path,
+    ReturnType, Type,
 };
 
 use crate::misc::{
@@ -20,9 +21,9 @@ use super::parsed::Parsed;
 /* Context */
 
 #[derive(Clone)]
-pub struct Context(Arc<ContextData>);
+pub(crate) struct Context(Arc<ContextData>);
 
-pub struct ContextData {
+pub(crate) struct ContextData {
     pub ident_module: Ident,
     pub ident_mock: Ident,
     pub ident_handle: Ident,
@@ -42,7 +43,7 @@ pub struct ContextData {
 }
 
 impl Context {
-    pub fn new(parsed: &Parsed) -> Self {
+    pub(crate) fn new(parsed: &Parsed) -> Self {
         let ident = parsed.ty.ident().to_string();
         let ident_mock = format_ident!("{}Mock", ident);
         let ident_handle = format_ident!("{}Handle", ident);
@@ -103,10 +104,10 @@ impl Deref for Context {
 /* ImplContext */
 
 #[derive(Clone)]
-pub struct ImplContext(Arc<ImplContextData>);
+pub(crate) struct ImplContext(Arc<ImplContextData>);
 
 impl ImplContext {
-    pub fn new(context: Context, impl_: &ItemImpl) -> Self {
+    pub(crate) fn new(context: Context, impl_: &ItemImpl) -> Self {
         let ga_impl = impl_.generics.clone();
         let (impl_, _lts_temp) = impl_.clone().split_off_temp_lifetimes();
 
@@ -149,7 +150,7 @@ impl Deref for ImplContext {
     }
 }
 
-pub struct ImplContextData {
+pub(crate) struct ImplContextData {
     pub context: Context,
 
     pub trait_: Option<Path>,
@@ -169,10 +170,11 @@ impl Deref for ImplContextData {
 /* MethodContext */
 
 #[derive(Clone)]
-pub struct MethodContext(Arc<MethodContextData>);
+pub(crate) struct MethodContext(Arc<MethodContextData>);
 
 impl MethodContext {
-    pub fn new(context: ImplContext, impl_: &ItemImpl, method: &ImplItemFn) -> Self {
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn new(context: ImplContext, impl_: &ItemImpl, method: &ImplItemFn) -> Self {
         let is_associated = method.is_associated_fn();
         let no_default_impl = method.has_murf_attr("no_default_impl");
 
@@ -194,7 +196,7 @@ impl MethodContext {
                 FnArg::Receiver(t) => PatType {
                     attrs: t.attrs.clone(),
                     pat: Box::new(Pat::Verbatim(quote!(this))),
-                    colon_token: Default::default(),
+                    colon_token: Colon::default(),
                     ty: Box::new(
                         t.ty.clone()
                             .replace_self_type(&type_mock, &mut has_self_arg),
@@ -253,7 +255,7 @@ impl MethodContext {
                     .get_lifetime_mut("'mock")
                     .unwrap()
                     .bounds
-                    .push(Lifetime::new("'static", Span::call_site()))
+                    .push(Lifetime::new("'static", Span::call_site()));
             }
         };
         let ga_expectation = ga_expectation.remove_lifetimes(&lts_temp);
@@ -269,7 +271,7 @@ impl MethodContext {
                 .get_lifetime_mut("'mock")
                 .unwrap()
                 .bounds
-                .push(Lifetime::new("'static", Span::call_site()))
+                .push(Lifetime::new("'static", Span::call_site()));
         }
 
         Self(Arc::new(MethodContextData {
@@ -312,14 +314,14 @@ impl Deref for MethodContext {
     }
 }
 
-pub struct MethodContextData {
+pub(crate) struct MethodContextData {
     pub context: ImplContext,
 
     pub is_associated: bool,
     pub no_default_impl: bool,
 
-    pub trait_: Option<Path>,
     pub impl_: ItemImpl,
+    pub trait_: Option<Path>,
 
     pub ga_method: Generics,
     pub ga_expectation: Generics,

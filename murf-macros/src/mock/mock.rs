@@ -5,7 +5,7 @@ use crate::mock::context::ImplContextData;
 
 use super::context::{Context, ContextData, ImplContext};
 
-pub struct Mock {
+pub(crate) struct Mock {
     context: Context,
     impls: Vec<Impl>,
 }
@@ -16,14 +16,14 @@ struct Impl {
 }
 
 impl Mock {
-    pub fn new(context: Context) -> Self {
+    pub(crate) fn new(context: Context) -> Self {
         Self {
             context,
             impls: Vec::new(),
         }
     }
 
-    pub fn add_impl(&mut self, context: ImplContext, items: Vec<ImplItem>) {
+    pub(crate) fn add_impl(&mut self, context: ImplContext, items: Vec<ImplItem>) {
         self.impls.push(Impl { context, items });
     }
 }
@@ -146,6 +146,6 @@ impl ToTokens for Mock {
             #mock_default_impl
 
             #( #impls )*
-        })
+        });
     }
 }

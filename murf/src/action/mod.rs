@@ -36,6 +36,7 @@ where
 
 /* OnetimeAction */
 
+#[derive(Debug)]
 pub struct OnetimeAction<X>(Option<X>);
 
 impl<X> OnetimeAction<X> {
@@ -58,6 +59,7 @@ where
 
 /* RepeatedAction */
 
+#[derive(Debug)]
 pub struct RepeatedAction<X>(X);
 
 impl<X> RepeatedAction<X> {

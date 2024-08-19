@@ -15,12 +15,12 @@ use syn::{
 use crate::misc::{format_expect_call, IterEx};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum CallMode {
+pub(crate) enum CallMode {
     Method,
     Static,
 }
 
-pub fn exec(input: TokenStream, mode: CallMode) -> TokenStream {
+pub(crate) fn exec(input: TokenStream, mode: CallMode) -> TokenStream {
     let mut call: Call = match parse2(input) {
         Ok(mock) => mock,
         Err(err) => {
@@ -42,7 +42,7 @@ struct Call {
 }
 
 impl Parse for Call {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+    fn parse(input: ParseStream<'_>) -> ParseResult<Self> {
         let obj = input.parse()?;
 
         let (obj, as_trait) = if let Expr::Cast(o) = obj {

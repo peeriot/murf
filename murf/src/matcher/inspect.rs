@@ -6,6 +6,8 @@ pub fn inspect<M>(inner: M) -> Inspect<M> {
     Inspect(inner)
 }
 
+#[must_use]
+#[derive(Debug)]
 pub struct Inspect<M>(pub M);
 
 impl<T, M> Matcher<T> for Inspect<M>

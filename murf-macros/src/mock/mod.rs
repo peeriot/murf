@@ -20,7 +20,7 @@ use syn::parse2;
 use mocked::Mocked;
 use parsed::Parsed;
 
-pub fn exec(input: TokenStream) -> TokenStream {
+pub(crate) fn exec(input: TokenStream) -> TokenStream {
     let mock = match parse2::<Parsed>(input) {
         Ok(parsed) => parsed,
         Err(err) => return err.to_compile_error(),

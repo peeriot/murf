@@ -11,6 +11,8 @@ where
     Range::new(range)
 }
 
+#[must_use]
+#[derive(Debug)]
 pub struct Range<R, T> {
     range: R,
     _marker: PhantomData<T>,

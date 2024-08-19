@@ -4,13 +4,13 @@ use quote::{quote, ToTokens};
 use super::{mock_module::MockModule, parsed::Parsed};
 
 /// Mocked implementation of a mock! macro
-pub struct Mocked {
+pub(crate) struct Mocked {
     parsed: Parsed,
     mock_module: MockModule,
 }
 
 impl Mocked {
-    pub fn new(parsed: Parsed) -> Self {
+    pub(crate) fn new(parsed: Parsed) -> Self {
         let mock_module = MockModule::new(&parsed);
 
         Self {
@@ -30,6 +30,6 @@ impl ToTokens for Mocked {
         tokens.extend(quote! {
             #parsed
             #mock_module
-        })
+        });
     }
 }

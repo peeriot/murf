@@ -6,6 +6,8 @@ pub fn no_args() -> NoArgs {
     NoArgs
 }
 
+#[must_use]
+#[derive(Debug)]
 pub struct NoArgs;
 
 impl Matcher<()> for NoArgs {

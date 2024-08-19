@@ -16,7 +16,7 @@ use super::{
 
 /* MockModule */
 
-pub struct MockModule {
+pub(crate) struct MockModule {
     pub context: Context,
     pub mock: Mock,
     pub mockable: Mockable,
@@ -27,7 +27,7 @@ pub struct MockModule {
 }
 
 impl MockModule {
-    pub fn new(parsed: &Parsed) -> Self {
+    pub(crate) fn new(parsed: &Parsed) -> Self {
         let context = Context::new(parsed);
         let mock = Mock::new(context.clone());
         let mockable = Mockable::new(context.clone());
@@ -156,6 +156,6 @@ impl ToTokens for MockModule {
 
                 #( #expectations )*
             }
-        })
+        });
     }
 }

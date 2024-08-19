@@ -8,7 +8,7 @@ use crate::misc::{FormattedString, GenericsEx, IterEx, TempLifetimes};
 
 use super::context::{ContextData, ImplContextData, MethodContext, MethodContextData};
 
-pub struct Expectation {
+pub(crate) struct Expectation {
     context: MethodContext,
 
     display: String,
@@ -16,7 +16,7 @@ pub struct Expectation {
 }
 
 impl Expectation {
-    pub fn new(context: MethodContext, impl_: &ItemImpl) -> Self {
+    pub(crate) fn new(context: MethodContext, impl_: &ItemImpl) -> Self {
         let display = if let Some(trait_) = &context.trait_ {
             format!(
                 "<{} as {}>::{}",
@@ -52,6 +52,7 @@ impl Expectation {
 }
 
 impl ToTokens for Expectation {
+    #[allow(clippy::too_many_lines)]
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let Self {
             context,
@@ -178,6 +179,6 @@ impl ToTokens for Expectation {
                     Ok(())
                 }
             }
-        })
+        });
     }
 }

@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 
-pub trait IterEx {
+pub(crate) trait IterEx {
     fn parenthesis(self) -> TokenStream;
 }
 

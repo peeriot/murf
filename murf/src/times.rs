@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 /* Times */
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Times {
     pub count: AtomicUsize,
     pub range: TimesRange,
@@ -14,7 +14,7 @@ pub struct Times {
 impl Times {
     pub fn new<R: Into<TimesRange>>(range: R) -> Self {
         Self {
-            count: Default::default(),
+            count: AtomicUsize::default(),
             range: range.into(),
         }
     }
@@ -42,6 +42,7 @@ impl Times {
 
 /* TimesRange */
 
+#[derive(Debug)]
 pub struct TimesRange {
     start: Bound<usize>,
     end: Bound<usize>,

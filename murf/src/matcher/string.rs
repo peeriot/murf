@@ -8,6 +8,8 @@ pub fn is_empty() -> IsEmpty {
     IsEmpty
 }
 
+#[must_use]
+#[derive(Debug)]
 pub struct IsEmpty;
 
 impl<X> Matcher<X> for IsEmpty
@@ -29,6 +31,7 @@ macro_rules! impl_str_matcher {
             $type(pattern.into())
         }
 
+        #[derive(Debug)]
         pub struct $type(String);
 
         impl<X> Matcher<X> for $type

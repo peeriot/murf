@@ -4,6 +4,7 @@ pub fn invoke<F>(func: F) -> Invoke<F> {
     Invoke(func)
 }
 
+#[derive(Debug)]
 pub struct Invoke<F>(pub F);
 
 impl<F, X, T> Action<X, T> for Invoke<F>

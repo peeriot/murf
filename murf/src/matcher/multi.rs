@@ -7,6 +7,8 @@ pub fn multi<T>(value: T) -> Multi<T> {
     Multi(value)
 }
 
+#[must_use]
+#[derive(Debug)]
 pub struct Multi<T>(T);
 
 macro_rules! impl_multi {

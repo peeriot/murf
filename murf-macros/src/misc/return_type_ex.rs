@@ -4,7 +4,7 @@ use syn::{Lifetime, ReturnType, Type};
 
 use super::{type_ex::LifetimeReplaceMode, TypeEx};
 
-pub trait ReturnTypeEx {
+pub(crate) trait ReturnTypeEx {
     fn to_action_return_type(&self, ty: &Type, need_mock_lt: &mut bool) -> Type;
 }
 

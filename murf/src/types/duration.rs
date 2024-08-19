@@ -11,6 +11,7 @@ pub struct Duration(pub StdDuration);
 
 macro_rules! impl_from {
     (fn $name:ident(value: $type:ty)) => {
+        #[must_use]
         pub fn $name(value: $type) -> Self {
             Self(StdDuration::$name(value))
         }

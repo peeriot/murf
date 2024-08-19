@@ -6,6 +6,7 @@ use parking_lot::{Mutex, MutexGuard};
 
 /* Sequence */
 
+#[must_use]
 #[derive(Default, Debug, Clone)]
 pub struct Sequence {
     inner: Arc<Mutex<Inner>>,
@@ -16,6 +17,7 @@ impl Sequence {
         Self::default()
     }
 
+    #[must_use]
     pub fn create_handle(&self) -> SequenceHandle {
         Inner::create_handle(self.inner.clone())
     }
@@ -31,14 +33,17 @@ pub struct SequenceHandle {
 }
 
 impl SequenceHandle {
+    #[must_use]
     pub fn is_active(&self) -> bool {
         self.inner.lock().is_active(self.id)
     }
 
+    #[must_use]
     pub fn is_done(&self) -> bool {
         self.inner.lock().is_done(self.id)
     }
 
+    #[must_use]
     pub fn sequence_id(&self) -> usize {
         self.sequence_id
     }
@@ -55,6 +60,7 @@ impl SequenceHandle {
         self.inner.lock().set_description(self.id, value);
     }
 
+    #[must_use]
     pub fn unsatisfied(&self) -> Unsatisfied<'_> {
         Unsatisfied::new(self)
     }
@@ -68,6 +74,7 @@ impl Drop for SequenceHandle {
 
 /* Unsatisfied */
 
+#[derive(Debug)]
 pub struct Unsatisfied<'a> {
     guard: MutexGuard<'a, Inner>,
     id_end: usize,
@@ -115,10 +122,12 @@ pub struct InSequence {
 }
 
 impl InSequence {
+    #[must_use]
     pub fn new(sequence: &Sequence) -> Self {
         Self::new_with(sequence.inner.clone())
     }
 
+    #[must_use]
     pub fn create_handle() -> Option<SequenceHandle> {
         CURRENT_SEQUENCE.with(|cell| {
             cell.borrow()

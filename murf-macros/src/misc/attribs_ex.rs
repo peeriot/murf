@@ -5,7 +5,7 @@ use syn::{
 
 /*AttribsEx */
 
-pub trait AttribsEx: Sized {
+pub(crate) trait AttribsEx: Sized {
     fn derives(&self, ident: &str) -> bool {
         let _ident = ident;
 

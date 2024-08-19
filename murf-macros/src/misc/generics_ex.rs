@@ -11,7 +11,7 @@ use crate::misc::IterEx;
 
 use super::TypeEx;
 
-pub trait GenericsEx {
+pub(crate) trait GenericsEx {
     fn get_lifetime_mut(&mut self, lt: &str) -> Option<&mut LifetimeParam>;
 
     fn add_lifetime(self, lt: &str) -> Self;

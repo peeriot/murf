@@ -11,14 +11,14 @@ use super::{
     parsed::Parsed,
 };
 
-pub struct ExpectationBuilder {
+pub(crate) struct ExpectationBuilder {
     context: MethodContext,
 
     must_use: Option<TokenStream>,
 }
 
 impl ExpectationBuilder {
-    pub fn new(context: MethodContext, parsed: &Parsed, method: &ImplItemFn) -> Self {
+    pub(crate) fn new(context: MethodContext, parsed: &Parsed, method: &ImplItemFn) -> Self {
         let must_use = (method.need_default_impl() && !method.has_default_impl() && !parsed.ty.is_extern()).then(|| quote!(#[must_use = "You need to define an action for this expectation because it has no default action!"]));
 
         ExpectationBuilder { context, must_use }
@@ -26,6 +26,7 @@ impl ExpectationBuilder {
 }
 
 impl ToTokens for ExpectationBuilder {
+    #[allow(clippy::too_many_lines)]
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let Self { context, must_use } = self;
 

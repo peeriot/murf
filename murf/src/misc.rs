@@ -33,6 +33,7 @@ where
 
 /* Borrow */
 
+#[derive(Debug)]
 pub struct Borrowed<T>(T);
 
 impl<T, X> Pointee<T> for Borrowed<X>
@@ -47,6 +48,7 @@ where
 
 /* Pointer */
 
+#[derive(Debug)]
 pub struct Pointer<T>(pub *const T);
 
 impl<T> Pointee<T> for Pointer<T>

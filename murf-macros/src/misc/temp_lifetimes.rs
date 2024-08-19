@@ -5,14 +5,14 @@ use proc_macro2::Span;
 use syn::{punctuated::Punctuated, token::Comma, Lifetime};
 
 #[derive(Default, Debug, Clone)]
-pub struct TempLifetimes(pub Punctuated<Lifetime, Comma>);
+pub(crate) struct TempLifetimes(pub Punctuated<Lifetime, Comma>);
 
 impl TempLifetimes {
-    pub fn new(lifetimes: Punctuated<Lifetime, Comma>) -> Self {
+    pub(crate) fn new(lifetimes: Punctuated<Lifetime, Comma>) -> Self {
         Self(lifetimes)
     }
 
-    pub fn generate(&mut self) -> Lifetime {
+    pub(crate) fn generate(&mut self) -> Lifetime {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
 
         let lt = format!("'murf_tmp_{id}");

@@ -12,12 +12,12 @@ use syn::{
 use crate::misc::AttribsEx;
 
 /// Parsed code inside the mock! macro
-pub struct Parsed {
+pub(crate) struct Parsed {
     pub ty: TypeToMock,
     pub impls: Vec<ItemImpl>,
 
-    pub derive_sync: bool,
     pub derive_send: bool,
+    pub derive_sync: bool,
 }
 
 impl Parsed {
@@ -46,7 +46,7 @@ impl Parsed {
                     defaultness: None,
                     sig,
                     block,
-                })
+                });
             }
         }
 
@@ -91,7 +91,7 @@ impl Parsed {
 }
 
 impl Parse for Parsed {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+    fn parse(input: ParseStream<'_>) -> ParseResult<Self> {
         let mut ty = input.parse::<TypeToMock>()?;
 
         let derive_send = ty.derives("Send");
@@ -144,7 +144,7 @@ impl ToTokens for Parsed {
 }
 
 /// Object the mock is implemented for
-pub enum TypeToMock {
+pub(crate) enum TypeToMock {
     Enum(ItemEnum),
     Struct(ItemStruct),
     Extern { ident: Ident, generics: Generics },
@@ -152,29 +152,27 @@ pub enum TypeToMock {
 }
 
 impl TypeToMock {
-    pub fn is_unknown(&self) -> bool {
+    pub(crate) fn is_unknown(&self) -> bool {
         matches!(self, Self::Unknown { .. })
     }
 
-    pub fn is_extern(&self) -> bool {
+    pub(crate) fn is_extern(&self) -> bool {
         matches!(self, Self::Extern { .. })
     }
 
-    pub fn ident(&self) -> &Ident {
+    pub(crate) fn ident(&self) -> &Ident {
         match self {
             Self::Enum(o) => &o.ident,
             Self::Struct(o) => &o.ident,
-            Self::Extern { ident, .. } => ident,
-            Self::Unknown { ident, .. } => ident,
+            Self::Extern { ident, .. } | Self::Unknown { ident, .. } => ident,
         }
     }
 
-    pub fn generics(&self) -> &Generics {
+    pub(crate) fn generics(&self) -> &Generics {
         match self {
             Self::Enum(o) => &o.generics,
             Self::Struct(o) => &o.generics,
-            Self::Extern { generics, .. } => generics,
-            Self::Unknown { generics, .. } => generics,
+            Self::Extern { generics, .. } | Self::Unknown { generics, .. } => generics,
         }
     }
 }
@@ -206,7 +204,7 @@ impl AttribsEx for TypeToMock {
 }
 
 impl Parse for TypeToMock {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+    fn parse(input: ParseStream<'_>) -> ParseResult<Self> {
         let fork = input.fork();
         let ret = match fork.parse::<Item>()? {
             Item::Enum(o) => Ok(Self::Enum(o)),
@@ -217,9 +215,9 @@ impl Parse for TypeToMock {
                         ident: p.path.segments.last().unwrap().ident.clone(),
                         generics: i.generics,
                     });
-                } else {
-                    Err(input.error("Unexpected type!"))
                 }
+
+                Err(input.error("Unexpected type!"))
             }
             _ => Err(input.error("Expected enum, struct or impl block!")),
         };

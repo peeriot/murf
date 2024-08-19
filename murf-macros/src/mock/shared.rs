@@ -5,20 +5,20 @@ use crate::{misc::GenericsEx, mock::context::MethodContextData};
 
 use super::context::{Context, ContextData, MethodContext};
 
-pub struct Shared {
+pub(crate) struct Shared {
     context: Context,
     expectations: Vec<MethodContext>,
 }
 
 impl Shared {
-    pub fn new(context: Context) -> Self {
+    pub(crate) fn new(context: Context) -> Self {
         Self {
             context,
             expectations: Vec::new(),
         }
     }
 
-    pub fn add_expectation(&mut self, context: MethodContext) {
+    pub(crate) fn add_expectation(&mut self, context: MethodContext) {
         self.expectations.push(context);
     }
 }

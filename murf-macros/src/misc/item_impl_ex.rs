@@ -4,7 +4,7 @@ use syn::{punctuated::Punctuated, GenericParam, ItemImpl, WherePredicate};
 
 use super::{TempLifetimes, TypeEx};
 
-pub trait ItemImplEx: Sized {
+pub(crate) trait ItemImplEx: Sized {
     fn split_off_temp_lifetimes(self) -> (Self, TempLifetimes);
 }
 
@@ -42,8 +42,7 @@ impl ItemImplEx for ItemImpl {
             .generics
             .where_clause
             .as_ref()
-            .map(|wc| wc.predicates.is_empty())
-            .unwrap_or(false)
+            .is_some_and(|wc| wc.predicates.is_empty())
         {
             self.generics.where_clause = None;
         }

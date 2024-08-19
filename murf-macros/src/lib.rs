@@ -1,3 +1,17 @@
+#![warn(
+    unused,
+    clippy::pedantic,
+    future_incompatible,
+    missing_debug_implementations,
+    nonstandard_style,
+    rust_2018_idioms,
+    rust_2021_compatibility
+)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::no_effect_underscore_binding,
+    clippy::similar_names
+)]
 #![cfg_attr(feature = "debug-to-file", feature(proc_macro_span))]
 
 use expect_call::CallMode;

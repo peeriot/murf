@@ -3,12 +3,12 @@ use quote::{quote, ToTokens};
 
 use super::context::{Context, ContextData};
 
-pub struct Mockable {
+pub(crate) struct Mockable {
     context: Context,
 }
 
 impl Mockable {
-    pub fn new(context: Context) -> Self {
+    pub(crate) fn new(context: Context) -> Self {
         Self { context }
     }
 }
@@ -53,7 +53,7 @@ impl ToTokens for Mockable {
                         self.into_mock().mock_split()
                     }
                 }
-            })
+            });
         } else {
             tokens.extend(quote! {
                 pub trait Mockable {
@@ -76,7 +76,7 @@ impl ToTokens for Mockable {
                         self.into_mock().mock_split()
                     }
                 }
-            })
+            });
         }
     }
 }

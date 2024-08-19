@@ -1,7 +1,7 @@
 use quote::{quote, ToTokens};
 use syn::{FnArg, ImplItemFn, Item, ReturnType, Stmt};
 
-pub trait MethodEx {
+pub(crate) trait MethodEx {
     fn is_associated_fn(&self) -> bool;
     fn has_default_impl(&self) -> bool;
     fn need_default_impl(&self) -> bool;

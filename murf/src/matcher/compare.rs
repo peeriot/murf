@@ -8,6 +8,8 @@ macro_rules! impl_matcher {
             $type(value)
         }
 
+        #[must_use]
+        #[derive(Debug)]
         pub struct $type<T>(pub T);
 
         impl<T, X> Matcher<X> for $type<T>

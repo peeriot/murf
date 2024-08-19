@@ -6,14 +6,14 @@ use crate::misc::GenericsEx;
 
 use super::context::{Context, ContextData, MethodContext, MethodContextData};
 
-pub struct Handle {
+pub(crate) struct Handle {
     context: Context,
     methods: Vec<MethodContext>,
     ga_handle_extra: Generics,
 }
 
 impl Handle {
-    pub fn new(context: Context) -> Self {
+    pub(crate) fn new(context: Context) -> Self {
         let ga_handle_extra = context.ga_handle.clone().add_lifetime_bounds("'mock");
 
         Self {
@@ -23,11 +23,11 @@ impl Handle {
         }
     }
 
-    pub fn add_method(&mut self, context: MethodContext) {
+    pub(crate) fn add_method(&mut self, context: MethodContext) {
         self.methods.push(context);
     }
 
-    fn render_method(&self, context: &MethodContextData) -> TokenStream {
+    fn render_method(context: &MethodContextData) -> TokenStream {
         let MethodContextData {
             is_associated,
             ident_expect_method,
@@ -70,7 +70,7 @@ impl ToTokens for Handle {
         let (ga_handle_extra_impl, ga_handle_extra_types, ga_handle_extra_where) =
             ga_handle_extra.split_for_impl();
 
-        let methods = methods.iter().map(|context| self.render_method(context));
+        let methods = methods.iter().map(|context| Self::render_method(context));
 
         tokens.extend(quote! {
             pub struct Handle #ga_handle_impl #ga_handle_where {

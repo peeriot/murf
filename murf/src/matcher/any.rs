@@ -6,6 +6,8 @@ pub fn any() -> Any {
     Any
 }
 
+#[must_use]
+#[derive(Debug)]
 pub struct Any;
 
 impl<T> Matcher<T> for Any {

@@ -5,10 +5,11 @@ use crate::misc::{AttribsEx, FormattedString, IterEx, TypeEx};
 
 use super::context::{MethodContext, MethodContextData};
 
-pub struct MockMethod;
+pub(crate) struct MockMethod;
 
 impl MockMethod {
-    pub fn render(context: &MethodContext, mut method: ImplItemFn) -> ImplItemFn {
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn render(context: &MethodContext, mut method: ImplItemFn) -> ImplItemFn {
         let MethodContextData {
             is_associated,
             no_default_impl,

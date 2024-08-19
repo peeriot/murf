@@ -3,12 +3,12 @@ use quote::{quote, ToTokens};
 
 use super::context::{Context, ContextData};
 
-pub struct MockableDefault {
+pub(crate) struct MockableDefault {
     pub context: Context,
 }
 
 impl MockableDefault {
-    pub fn new(context: Context) -> Self {
+    pub(crate) fn new(context: Context) -> Self {
         Self { context }
     }
 }

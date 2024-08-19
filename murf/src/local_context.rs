@@ -8,10 +8,13 @@ use parking_lot::Mutex;
 
 use crate::Expectation;
 
+#[must_use]
+#[derive(Debug)]
 pub struct LocalContext {
     _marker: PhantomData<()>,
 }
 
+#[derive(Debug)]
 pub struct Inner {
     parent: Option<Box<Inner>>,
     expectations: HashMap<usize, Vec<WeakException>>,
@@ -28,7 +31,7 @@ impl LocalContext {
             *cell = Some(Inner {
                 parent,
                 expectations: HashMap::new(),
-            })
+            });
         });
 
         Self {
@@ -37,7 +40,7 @@ impl LocalContext {
     }
 
     pub fn current() -> Rc<RefCell<Option<Inner>>> {
-        CURRENT_CONTEXT.with(|cell| cell.clone())
+        CURRENT_CONTEXT.with(Clone::clone)
     }
 }
 

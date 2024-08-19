@@ -9,14 +9,14 @@ use super::{
     parsed::Parsed,
 };
 
-pub struct ExpectationModule {
+pub(crate) struct ExpectationModule {
     pub context: MethodContext,
     pub expectation: Expectation,
     pub expectation_builder: ExpectationBuilder,
 }
 
 impl ExpectationModule {
-    pub fn new(
+    pub(crate) fn new(
         context: MethodContext,
         parsed: &Parsed,
         impl_: &ItemImpl,

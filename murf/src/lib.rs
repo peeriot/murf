@@ -1,3 +1,14 @@
+#![warn(
+    unused,
+    clippy::pedantic,
+    future_incompatible,
+    missing_debug_implementations,
+    nonstandard_style,
+    rust_2018_idioms,
+    rust_2021_compatibility
+)]
+#![allow(clippy::module_name_repetitions)]
+
 pub mod action;
 pub mod local_context;
 pub mod matcher;
