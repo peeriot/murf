@@ -9,7 +9,7 @@
     unused
 )]
 #![doc = include_str!("../README.md")]
-#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions, clippy::needless_doctest_main)]
 
 pub mod action;
 pub mod local_context;

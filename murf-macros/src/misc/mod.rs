@@ -63,6 +63,12 @@ pub(crate) fn format_expectations_field(ident: &Ident) -> Ident {
     format_ident!("{}_expectations", ident)
 }
 
+#[cfg(feature = "force-name")]
+pub(crate) fn ident_murf() -> Ident {
+    format_ident!("murf")
+}
+
+#[cfg(not(feature = "force-name"))]
 pub(crate) fn ident_murf() -> Ident {
     use proc_macro_crate::{crate_name, FoundCrate};
 

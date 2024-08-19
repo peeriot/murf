@@ -11,4 +11,4 @@ parse_duration = "2.1"
 
 [dev-dependencies]
 futures = "0.3"
-murf-macros = { version = "*", features = [ ] }
+murf-macros = { version = "*", features = [ "force-name" ] }

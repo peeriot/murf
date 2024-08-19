@@ -16,6 +16,7 @@ proc-macro = true
 default = []
 debug = []
 debug-to-file = []
+force-name = []
 
 [dependencies]
 convert_case = "0.6"
